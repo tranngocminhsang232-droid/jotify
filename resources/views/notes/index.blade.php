@@ -1,0 +1,1015 @@
+@extends('layouts.app')
+@section('title', 'My Notes - JOTIFY')
+
+@section('header')
+<div class="flex-1 flex items-center gap-4">
+    {{-- Search --}}
+    <div class="relative flex-1 max-w-lg">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 material-icons-outlined text-muted text-lg">search</span>
+        <input type="text" id="search-input"
+               value="{{ request('search') }}"
+               placeholder="Search notes..."
+               autocomplete="off"
+               class="w-full h-10 pl-10 pr-4 rounded-xl bg-hover border border-border text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-[#22c55e]/30 transition-all">
+        <span id="search-spinner" class="absolute right-3 top-1/2 -translate-y-1/2 material-icons-outlined text-muted text-lg animate-spin hidden">sync</span>
+    </div>
+
+    {{-- View toggle â€” smooth sliding pill, no page-flash --}}
+    <div class="view-toggle-wrap" id="view-toggle">
+        {{-- Sliding pill --}}
+        <div class="view-toggle-pill" id="toggle-pill"
+             style="transform: translateX({{ $preferences->view_mode === 'list' ? 'calc(100% + 2px)' : '0px' }})"></div>
+        <button onclick="switchView('grid')" id="btn-grid"
+                class="view-toggle-btn {{ $preferences->view_mode === 'grid' ? 'active' : '' }}"
+                aria-label="Grid view">
+            <span class="material-icons-outlined" style="font-size:1.125rem;">grid_view</span>
+        </button>
+        <button onclick="switchView('list')" id="btn-list"
+                class="view-toggle-btn {{ $preferences->view_mode === 'list' ? 'active' : '' }}"
+                aria-label="List view">
+            <span class="material-icons-outlined" style="font-size:1.125rem;">view_list</span>
+        </button>
+    </div>
+
+    <style>
+    /* â”€â”€ Pill toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .view-toggle-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: var(--color-hover);
+        border: 1px solid var(--color-border);
+        border-radius: 0.75rem;   /* 12px */
+        padding: 3px;
+        gap: 2px;
+    }
+
+    /* The sliding green pill sits behind the buttons */
+    .view-toggle-pill {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        /* width = one button â€” will resize via JS on first paint */
+        width: var(--pill-w, 34px);
+        height: var(--pill-h, 34px);
+        background: var(--accent-dim, #16a34a);
+        border-radius: 0.5rem;    /* 8px â€” slightly tighter than wrapper */
+        box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        transition: transform 0.26s cubic-bezier(0.34, 1.26, 0.64, 1);
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .view-toggle-btn {
+        position: relative;
+        z-index: 1;               /* above the pill */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 0.5rem;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        /* colour transitions â€” both buttons use the SAME rules */
+        color: var(--color-muted);
+        transition: color 0.22s ease, background-color 0.18s ease;
+    }
+
+    /* Hover â€” works equally for BOTH buttons */
+    .view-toggle-btn:not(.active):hover {
+        background-color: rgba(255,255,255,0.07);
+        color: var(--color-body-text);
+    }
+
+    /* Active state â€” icon turns white to contrast the green pill */
+    .view-toggle-btn.active {
+        color: #ffffff;
+    }
+    </style>
+
+    {{-- New note --}}
+    <form action="/notes" method="POST" class="inline" id="new-note-form">
+        @csrf
+        <button type="submit" class="btn-primary h-10 !py-0 px-4" id="btn-new-note">
+            <span class="material-icons-outlined text-lg">add</span>
+            <span class="hidden sm:inline">New Note</span>
+        </button>
+    </form>
+</div>
+@endsection
+
+@section('content')
+{{-- Label filter chips --}}
+@if($labels->count() > 0)
+<div class="flex flex-wrap gap-2 mb-6" id="label-chips">
+    <a href="/notes" class="label-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+        {{ !request('labels') ? 'bg-[#16a34a] text-white' : 'bg-hover text-muted hover:text-body border border-border' }}"
+       data-label-id="">
+        All Notes
+    </a>
+    @foreach($labels as $label)
+    <a href="/notes?labels={{ $label->id }}"
+       class="label-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+        {{ request('labels') == $label->id ? 'text-white shadow-md' : 'bg-hover text-muted hover:text-body border border-border' }}"
+       data-label-id="{{ $label->id }}"
+       style="{{ request('labels') == $label->id ? 'background-color:'.$label->color : '' }}">
+        <span class="w-2 h-2 rounded-full" style="background-color: {{ $label->color }}"></span>
+        {{ $label->name }}
+    </a>
+    @endforeach
+</div>
+@endif
+
+{{-- Notes container --}}
+<div id="notes-container" class="{{ $preferences->view_mode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'flex flex-col gap-2' }}">
+    @forelse($notes as $note)
+    @include('notes.partials.note-card', ['note' => $note, 'viewMode' => $preferences->view_mode])
+    @empty
+    <div class="col-span-full" id="empty-state">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <div class="w-24 h-24 rounded-3xl flex items-center justify-center mb-6" style="background:var(--accent-subtle);">
+                <span class="material-icons-outlined text-5xl" style="color:var(--accent-dim);opacity:0.6;">note_add</span>
+            </div>
+            <h3 class="text-lg font-semibold mb-2">No notes yet</h3>
+            <p class="text-muted text-sm mb-6">Create your first note to get started</p>
+            <form action="/notes" method="POST">
+                @csrf
+                <button type="submit" class="btn-primary">
+                    <span class="material-icons-outlined">add</span>
+                    Create Note
+                </button>
+            </form>
+        </div>
+    </div>
+    @endforelse
+</div>
+
+{{-- No results state (hidden by default, used by AJAX search) --}}
+<div id="no-results-state" class="hidden col-span-full">
+    <div class="flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-slate-500/10 to-slate-500/10 flex items-center justify-center mb-6">
+            <span class="material-icons-outlined text-5xl text-slate-500/50">search_off</span>
+        </div>
+        <h3 class="text-lg font-semibold mb-2">No notes found</h3>
+        <p class="text-muted text-sm">Try a different search term</p>
+    </div>
+</div>
+
+{{-- Modal + Swipe styles --}}
+<style>
+    /* Overlay fade */
+    .modal-overlay {
+        transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .modal-overlay.modal-hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+    /* Card scale+slide */
+    .modal-box {
+        transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                    transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+    .modal-overlay.modal-hidden .modal-box {
+        opacity: 0;
+        transform: scale(0.92) translateY(12px);
+    }
+    .modal-overlay:not(.modal-hidden) .modal-box {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+
+    /* ─── Note card wrapper ──────────────────────────────────────────── */
+    .note-card-wrapper {
+        position: relative;
+        border-radius: 0.875rem;
+        transition: transform 0.22s cubic-bezier(0.34, 1.26, 0.64, 1), box-shadow 0.22s ease;
+        transform-origin: center center;
+        will-change: transform;
+        overflow: hidden;
+    }
+    /* Grid hover: zoom + lift */
+    #notes-container.grid .note-card-wrapper:hover {
+        transform: scale(1.03) translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+    }
+    /* List hover: zoom nhẹ hơn + lift */
+    #notes-container:not(.grid) .note-card-wrapper:hover {
+        transform: scale(1.015) translateY(-1px);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+        z-index: 10;
+    }
+
+    /* ─── Card inner body (full-clickable) ───────────────────────────── */
+    .note-card-inner {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        cursor: pointer;
+        touch-action: pan-y;
+    }
+    .note-card-inner.swiping { touch-action: none; }
+
+    /* Grid card */
+    .note-card-grid {
+        display: flex;
+        flex-direction: column;
+        padding: 1rem 1rem 0.875rem;
+        min-height: 150px;
+        background: var(--color-card);
+        border-radius: 0.875rem;
+        border: 1px solid var(--color-border);
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .note-card-grid:focus { outline: none; }
+    .note-card-grid:focus-visible {
+        outline: 2px solid var(--accent, #22c55e);
+        outline-offset: -2px;
+    }
+    .note-card-wrapper:hover .note-card-grid {
+        border-color: rgba(34,197,94,0.35);
+        background: var(--color-card);
+    }
+
+    /* List card */
+    .note-card-list {
+        display: flex;
+        align-items: center;
+        padding: 0.875rem 1.125rem;
+        min-height: 68px;
+        background: var(--color-card);
+        border-radius: 0.875rem;
+        border: 1px solid var(--color-border);
+        transition: border-color 0.2s ease, background 0.2s ease;
+        gap: 0.875rem;
+    }
+    .note-card-list:focus { outline: none; }
+    .note-card-list:focus-visible {
+        outline: 2px solid var(--accent, #22c55e);
+        outline-offset: -2px;
+    }
+    .note-card-wrapper:hover .note-card-list {
+        border-color: rgba(34,197,94,0.35);
+        background: var(--color-hover);
+    }
+
+    /* ─── Hover action buttons ────────────────────────────────────────── */
+    .note-hover-actions {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        display: flex;
+        gap: 3px;
+        z-index: 5;
+        opacity: 0;
+        transform: translateY(-3px) scale(0.9);
+        transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.34,1.26,0.64,1);
+        pointer-events: none;
+    }
+    .note-card-wrapper:hover .note-hover-actions {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+
+    .note-hover-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: var(--color-card);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.06);
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s cubic-bezier(0.34,1.26,0.64,1), box-shadow 0.15s ease;
+    }
+    .note-hover-btn .material-icons-outlined {
+        font-size: 0.875rem;
+        color: var(--color-muted);
+        transition: color 0.15s ease, transform 0.15s cubic-bezier(0.34,1.26,0.64,1);
+        pointer-events: none;
+    }
+    .pin-hover-btn:hover {
+        background: rgba(245,158,11,0.18);
+        box-shadow: 0 2px 10px rgba(245,158,11,0.3);
+        transform: scale(1.2);
+    }
+    .pin-hover-btn:hover .material-icons-outlined { color: #f59e0b; transform: rotate(-20deg); }
+    .pin-hover-btn.is-pinned .material-icons-outlined { color: #f59e0b; }
+
+    .delete-hover-btn:hover {
+        background: rgba(239,68,68,0.15);
+        box-shadow: 0 2px 10px rgba(239,68,68,0.25);
+        transform: scale(1.2);
+    }
+    .delete-hover-btn:hover .material-icons-outlined { color: #ef4444; }
+
+    /* ─── Typography ──────────────────────────────────────────────────── */
+    .note-title {
+        font-weight: 700;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        margin-bottom: 0.375rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        padding-right: 3.5rem;
+        color: var(--color-body-text);
+        letter-spacing: -0.01em;
+    }
+    @media (min-width:640px) { .note-title { font-size: 0.9375rem; } }
+
+    .note-preview {
+        font-size: 0.75rem;
+        color: var(--color-muted);
+        margin-bottom: 0.5rem;
+        flex: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.5;
+        opacity: 1;
+    }
+    @media (min-width:640px) { .note-preview { font-size: 0.8125rem; } }
+
+    .note-footer {
+        display: flex;
+        align-items: center;
+        padding-top: 0.4rem;
+        border-top: 1px solid rgba(var(--color-border-rgb, 100,100,100), 0.25);
+        margin-top: auto;
+    }
+    .note-time {
+        font-size: 0.625rem;
+        color: var(--color-muted);
+        opacity: 0.7;
+        font-variant-numeric: tabular-nums;
+    }
+    /* Fade timestamp khi hover — grid & list */
+    .note-time, .note-list-time {
+        transition: opacity 0.18s ease;
+    }
+    .note-card-wrapper:hover .note-time,
+    .note-card-wrapper:hover .note-list-time {
+        opacity: 0;
+    }
+
+    /* Label chips */
+    .note-label-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 7px;
+        border-radius: 9999px;
+        font-size: 9px;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: 0.02em;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    /* ─── Swipe-to-action (mobile) ───────────────────────────────────── */
+    .swipe-row { /* alias for note-card-wrapper */ }
+    .swipe-reveal {
+        position: absolute;
+        inset-block: 0;
+        width: 90px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        color: #fff;
+        opacity: 0;
+        transform: scale(0.75);
+        transition: opacity 0.12s, transform 0.12s;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .swipe-reveal .material-icons-outlined { font-size: 1.6rem; }
+    .swipe-reveal .swipe-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .swipe-pin-reveal    { left: 0;  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 0.75rem 0 0 0.75rem; }
+    .swipe-delete-reveal { right: 0; background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); border-radius: 0 0.75rem 0.75rem 0; }
+    .swipe-reveal.triggered {
+        transform: scale(1.12) !important;
+        transition: transform 0.08s cubic-bezier(0.34, 1.8, 0.64, 1);
+    }
+    .note-swipeable {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        touch-action: pan-y;
+    }
+    .note-swipeable.swiping { touch-action: none; }
+</style>
+
+{{-- Password unlock modal --}}
+<div id="password-modal"
+     class="modal-overlay modal-hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+     style="display:none">
+    <div class="modal-box bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm mx-4 p-6">
+        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+            <span class="material-icons-outlined text-amber-500">lock</span>
+            Note is Password Protected
+        </h3>
+        <form id="unlock-form" onsubmit="unlockNote(event)" data-no-transition>
+            <input type="hidden" id="unlock-note-id">
+            <input type="hidden" id="unlock-action">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Enter Password</label>
+                <input type="password" id="unlock-password" class="form-input w-full" placeholder="Note password" required>
+                <p id="unlock-error" class="text-red-500 text-xs mt-1 hidden"></p>
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button type="button" onclick="closePasswordModal()" class="btn-secondary">Cancel</button>
+                <button type="submit" class="btn-primary">Unlock</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Delete confirm modal --}}
+<div id="delete-modal"
+     class="modal-overlay modal-hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+     style="display:none">
+    <div class="modal-box bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm mx-4 p-6">
+        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
+            <span class="material-icons-outlined text-red-500">delete</span>
+            Delete Note
+        </h3>
+        <p class="text-muted text-sm mb-6">Are you sure you want to delete this note? This action cannot be undone.</p>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closeDeleteModal()" class="btn-secondary">Cancel</button>
+            <button id="confirm-delete-btn" class="btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+// â”€â”€ IIFE: prevents let/const top-level re-declaration SyntaxError on AJAX nav re-execution.
+// Without wrapping, every navigate-back aborts this script silently â†’ pin/delete stop working.
+(function () {
+    let currentLabels = '{{ request('labels') }}';
+    let searchTimeout = null;
+    let deleteNoteId  = null;
+    const MODAL_CLOSE_DELAY = 200;
+
+    // â”€â”€â”€ View Switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.switchView = function(mode) {
+        const btnGrid   = document.getElementById('btn-grid');
+        const btnList   = document.getElementById('btn-list');
+        const pill      = document.getElementById('toggle-pill');
+        const container = document.getElementById('notes-container');
+        if (!btnGrid || !btnList || !pill || !container) return;
+
+        if (mode === 'grid') {
+            pill.style.transform = 'translateX(0px)';
+            btnGrid.classList.add('active'); btnList.classList.remove('active');
+            container.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+        } else {
+            pill.style.transform = 'translateX(calc(100% + 2px))';
+            btnList.classList.add('active'); btnGrid.classList.remove('active');
+            container.className = 'flex flex-col gap-2';
+        }
+        // Update per-card classes so CSS selectors (note-card-grid / note-card-list) apply correctly
+        container.querySelectorAll('.note-card-inner').forEach(card => {
+            if (mode === 'grid') {
+                card.classList.add('note-card-grid');
+                card.classList.remove('note-card-list');
+            } else {
+                card.classList.add('note-card-list');
+                card.classList.remove('note-card-grid');
+            }
+        });
+        fetch('/preferences/view-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.csrfToken },
+            body: JSON.stringify({ view_mode: mode })
+        }).catch(() => {});
+    };
+
+    // Sync pill size via rAF (works on both first load and AJAX nav re-execution)
+    requestAnimationFrame(() => {
+        const btn  = document.getElementById('btn-grid');
+        const pill = document.getElementById('toggle-pill');
+        if (!btn || !pill) return;
+        const sz = btn.getBoundingClientRect();
+        pill.style.setProperty('--pill-w', sz.width  + 'px');
+        pill.style.setProperty('--pill-h', sz.height + 'px');
+        pill.style.width  = sz.width  + 'px';
+        pill.style.height = sz.height + 'px';
+    });
+
+    // â”€â”€â”€ Live Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        if (searchInput._notesHandler) {
+            searchInput.removeEventListener('input', searchInput._notesHandler);
+        }
+        searchInput._notesHandler = function () {
+            clearTimeout(searchTimeout);
+            const q = this.value;
+            const spinner = document.getElementById('search-spinner');
+            // Only show spinner when we actually start fetching (after debounce)
+            searchTimeout = setTimeout(() => {
+                if (spinner) spinner.classList.remove('hidden');
+                window.doSearch(q, currentLabels);
+            }, 300);
+        };
+        searchInput.addEventListener('input', searchInput._notesHandler);
+    }
+
+    window.doSearch = function(query, labelId) {
+        const params = new URLSearchParams();
+        if (query)   params.set('search', query);
+        if (labelId) params.set('labels', labelId);
+        fetch('/notes?' + params.toString(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            const sp = document.getElementById('search-spinner');
+            if (sp) sp.classList.add('hidden');
+            window.renderNotes(data.notes);
+        })
+        .catch(() => {
+            const sp = document.getElementById('search-spinner');
+            if (sp) sp.classList.add('hidden');
+        });
+    };
+
+    window.renderNotes = function(notes) {
+        const container = document.getElementById('notes-container');
+        const noResults = document.getElementById('no-results-state');
+        if (!container) return;
+        if (notes.length === 0) {
+            container.innerHTML = '';
+            if (noResults) noResults.classList.remove('hidden');
+            return;
+        }
+        if (noResults) noResults.classList.add('hidden');
+        container.innerHTML = notes.map(note => window.buildNoteCard(note)).join('');
+    };
+
+    function esc(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+
+    window.buildNoteCard = function(note) {
+        const isGrid    = document.getElementById('notes-container')?.classList.contains('grid');
+        const borderTop = note.note_color && note.note_color !== '#ffffff' ? `border-top:3px solid ${note.note_color};` : '';
+        const hp        = note.has_password ? 'true' : 'false';
+        const pinned    = note.is_pinned ? '1' : '0';
+
+        const statusIcons = [
+            note.is_pinned    ? `<span class="material-icons-outlined text-amber-500" style="font-size:13px" title="Pinned">push_pin</span>` : '',
+            note.has_password ? `<span class="material-icons-outlined text-red-400"   style="font-size:13px" title="Protected">lock</span>` : '',
+            note.is_shared    ? `<span class="material-icons-outlined text-blue-400"  style="font-size:13px" title="Shared">share</span>` : '',
+        ].filter(Boolean).join('');
+
+        const labelsGrid = note.labels.slice(0,2).map(l =>
+            `<span class="note-label-chip" style="background-color:${l.color};font-size:9px">${l.name}</span>`
+        ).join('') + (note.labels.length > 2 ? `<span style="font-size:9px" class="text-muted">+${note.labels.length-2}</span>` : '');
+        const labelsList = note.labels.slice(0,2).map(l =>
+            `<span class="note-label-chip" style="background-color:${l.color}">${l.name}</span>`
+        ).join('');
+
+        // hoverActions là SIBLING của card trong wrapper → click không bubble lên card
+        const hoverActions = `
+            <div class="note-hover-actions">
+                <button type="button" class="note-hover-btn pin-hover-btn ${note.is_pinned ? 'is-pinned' : ''}"
+                        onclick="window.togglePin(${note.id})"
+                        title="${note.is_pinned ? 'Unpin' : 'Pin'}" aria-label="Toggle pin">
+                    <span class="material-icons-outlined" style="${note.is_pinned ? 'color:#f59e0b' : ''}">push_pin</span>
+                </button>
+                <button type="button" class="note-hover-btn delete-hover-btn"
+                        onclick="window.confirmDelete(${note.id},${hp})"
+                        title="Delete note" aria-label="Delete note">
+                    <span class="material-icons-outlined">delete</span>
+                </button>
+            </div>`;
+
+        const swipeReveal = `
+            <div class="swipe-reveal swipe-pin-reveal" aria-hidden="true">
+                <span class="material-icons-outlined">push_pin</span>
+                <span class="swipe-label">${note.is_pinned ? 'Unpin' : 'Pin'}</span>
+            </div>
+            <div class="swipe-reveal swipe-delete-reveal" aria-hidden="true">
+                <span class="material-icons-outlined">delete</span>
+                <span class="swipe-label">Delete</span>
+            </div>`;
+
+        if (isGrid) {
+            return `
+            <div class="note-card-wrapper swipe-row">
+                ${swipeReveal}
+                ${hoverActions}
+                <div id="note-card-${note.id}" class="note-card-inner note-card-grid"
+                     data-pinned="${pinned}" data-has-password="${hp}"
+                     data-note-ts="${note.created_at_ts || note.id}"
+                     style="${borderTop}"
+                     onclick="editNote(${note.id},${hp})" role="button" tabindex="0">
+                    ${statusIcons ? `<div class="flex items-center gap-1 mb-1.5">${statusIcons}</div>` : ''}
+                    <h3 class="note-title">${esc(note.title) || 'Untitled'}</h3>
+                    <p class="note-preview">${esc(note.content)}</p>
+                    ${labelsGrid ? `<div class="flex flex-wrap gap-1 mb-1">${labelsGrid}</div>` : ''}
+                    <div class="note-footer"><span class="note-time">${note.updated_at}</span></div>
+                </div>
+            </div>`;
+        } else {
+            return `
+            <div class="note-card-wrapper swipe-row">
+                ${swipeReveal}
+                ${hoverActions}
+                <div id="note-card-${note.id}" class="note-card-inner note-card-list"
+                     data-pinned="${pinned}" data-has-password="${hp}"
+                     data-note-ts="${note.created_at_ts || note.id}"
+                     style="${borderTop}"
+                     onclick="editNote(${note.id},${hp})" role="button" tabindex="0">
+                    <div class="flex items-center gap-2 w-full min-w-0">
+                        ${statusIcons ? `<div class="flex items-center gap-0.5 flex-shrink-0">${statusIcons}</div>` : ''}
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-sm truncate">${esc(note.title) || 'Untitled'}</h3>
+                            <p class="text-xs text-muted truncate">${esc(note.content)}</p>
+                        </div>
+                        ${labelsList ? `<div class="hidden md:flex gap-1 flex-shrink-0">${labelsList}</div>` : ''}
+                        <span class="text-xs text-muted flex-shrink-0 hidden lg:block whitespace-nowrap note-list-time">${note.updated_at}</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+    };
+
+
+    // â”€â”€â”€ Label Filter Chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    document.querySelectorAll('.label-chip').forEach(chip => {
+        chip.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentLabels = this.dataset.labelId;
+            document.querySelectorAll('.label-chip').forEach(c => {
+                c.classList.remove('bg-[#16a34a]', 'text-white');
+                c.classList.add('bg-hover', 'text-muted', 'border', 'border-border');
+                c.style.backgroundColor = '';
+            });
+            this.classList.remove('bg-hover', 'text-muted', 'border', 'border-border');
+            this.classList.add('bg-[#16a34a]', 'text-white');
+            window.doSearch(document.getElementById('search-input')?.value || '', currentLabels);
+        });
+    });
+
+    // â”€â”€â”€ Swipe-to-action gestures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function initSwipeGestures() {
+        const container = document.getElementById('notes-container');
+        if (!container || container._swipeInit) return;
+        container._swipeInit = true; // guard: one handler per container
+
+        const THRESHOLD = 80;
+        let startX = 0, startY = 0;
+        let activeCard = null, activeRow = null;
+        let pinReveal = null, delReveal = null;
+        let isHoriz = false, thresholdHit = false;
+
+        container.addEventListener('touchstart', e => {
+            const card = e.target.closest('.note-card-inner');
+            if (!card) return;
+            const row = card.closest('.swipe-row');
+            if (!row) return;
+            activeCard   = card;
+            activeRow    = row;
+            pinReveal    = row.querySelector('.swipe-pin-reveal');
+            delReveal    = row.querySelector('.swipe-delete-reveal');
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            isHoriz = false;
+            thresholdHit = false;
+            activeCard.style.transition = 'none';
+        }, { passive: true });
+
+        container.addEventListener('touchmove', e => {
+            if (!activeCard) return;
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+
+            if (!isHoriz) {
+                if (Math.abs(dy) > Math.abs(dx) + 6) { activeCard = null; return; }
+                if (Math.abs(dx) < 8) return;
+                isHoriz = true;
+                activeCard.classList.add('swiping');
+            }
+            e.preventDefault();
+
+            const max     = THRESHOLD * 1.4;
+            const clamped = Math.max(-max, Math.min(max, dx));
+            activeCard.style.transform = `translateX(${clamped}px)`;
+
+            const progress = Math.min(Math.abs(clamped) / THRESHOLD, 1);
+            const scale    = 0.7 + 0.3 * progress;
+
+            if (dx > 0) {
+                if (pinReveal) { pinReveal.style.opacity = progress; pinReveal.style.transform = `scale(${scale})`; }
+                if (delReveal) { delReveal.style.opacity = '0'; }
+            } else {
+                if (delReveal) { delReveal.style.opacity = progress; delReveal.style.transform = `scale(${scale})`; }
+                if (pinReveal) { pinReveal.style.opacity = '0'; }
+            }
+
+            if (Math.abs(dx) >= THRESHOLD && !thresholdHit) {
+                thresholdHit = true;
+                (dx > 0 ? pinReveal : delReveal)?.classList.add('triggered');
+                if (navigator.vibrate) navigator.vibrate(10);
+            } else if (Math.abs(dx) < THRESHOLD && thresholdHit) {
+                thresholdHit = false;
+                pinReveal?.classList.remove('triggered');
+                delReveal?.classList.remove('triggered');
+            }
+        }, { passive: false });
+
+        const resetSwipe = (card, row) => {
+            if (!card) return;
+            card.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            card.style.transform  = '';
+            card.classList.remove('swiping');
+            row?.querySelectorAll('.swipe-reveal').forEach(el => {
+                el.style.opacity   = '0';
+                el.style.transform = 'scale(0.75)';
+                el.classList.remove('triggered');
+            });
+        };
+
+        container.addEventListener('touchend', e => {
+            if (!activeCard || !isHoriz) { activeCard = null; return; }
+            const dx          = e.changedTouches[0].clientX - startX;
+            const card        = activeCard;
+            const row         = activeRow;
+            const noteId      = parseInt(card.id.replace('note-card-', ''), 10);
+            const hasPassword = card.dataset.hasPassword === 'true';
+
+            resetSwipe(card, row);
+            activeCard = null;
+
+            if (dx >= THRESHOLD) {
+                setTimeout(() => window.togglePin(noteId), 180);
+            } else if (dx <= -THRESHOLD) {
+                setTimeout(() => window.confirmDelete(noteId, hasPassword), 180);
+            }
+        });
+
+        container.addEventListener('touchcancel', () => {
+            resetSwipe(activeCard, activeRow);
+            activeCard = null;
+        });
+    }
+    initSwipeGestures();
+
+    // â”€â”€â”€ Modal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.openModal = function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = 'flex';
+        el.getBoundingClientRect();
+        el.classList.remove('modal-hidden');
+    };
+    window.closeModal = function(id, cb) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('modal-hidden');
+        setTimeout(() => { el.style.display = 'none'; if (cb) cb(); }, MODAL_CLOSE_DELAY);
+    };
+
+    // â”€â”€â”€ Password modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.requirePassword = function(noteId, action) {
+        const noteIdEl = document.getElementById('unlock-note-id');
+        const actionEl = document.getElementById('unlock-action');
+        const pwEl     = document.getElementById('unlock-password');
+        const errEl    = document.getElementById('unlock-error');
+        if (noteIdEl) noteIdEl.value = noteId;
+        if (actionEl) actionEl.value = action;
+        if (pwEl)     pwEl.value = '';
+        if (errEl)    errEl.classList.add('hidden');
+        window.openModal('password-modal');
+        setTimeout(() => { if (pwEl) pwEl.focus(); }, 80);
+    };
+    window.closePasswordModal = function() { window.closeModal('password-modal'); };
+    window.unlockNote = async function(e) {
+        e.preventDefault();
+        const noteId   = document.getElementById('unlock-note-id')?.value;
+        const password = document.getElementById('unlock-password')?.value;
+        const action   = document.getElementById('unlock-action')?.value;
+        try {
+            await apiCall(`/notes/${noteId}/unlock`, 'POST', { password });
+            window.closePasswordModal();
+            if (action === 'edit') {
+                const url = `/notes/${noteId}/edit`;
+                if (window.ajaxNav) window.ajaxNav(url); else location.href = url;
+            } else if (action === 'delete') {
+                window.showDeleteModal(noteId);
+            }
+        } catch (err) {
+            const errEl = document.getElementById('unlock-error');
+            if (errEl) { errEl.textContent = err.error || 'Incorrect password'; errEl.classList.remove('hidden'); }
+        }
+    };
+
+    // â”€â”€â”€ Delete modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.showDeleteModal = function(noteId) {
+        deleteNoteId = noteId;
+        window.openModal('delete-modal');
+        // cloneNode removes all old event listeners on the button reliably
+        const oldBtn = document.getElementById('confirm-delete-btn');
+        if (!oldBtn) return;
+        const newBtn = oldBtn.cloneNode(true);
+        oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+        newBtn.addEventListener('click', async () => {
+            try {
+                await apiCall(`/notes/${noteId}`, 'DELETE');
+                window.closeModal('delete-modal', () => {
+                    showToast('Note deleted successfully');
+                    const _cardEl = document.getElementById(`note-card-${noteId}`);
+                    const _wrapEl = _cardEl ? (_cardEl.closest('.note-card-wrapper') || _cardEl.closest('.swipe-row')) : null;
+                    (_wrapEl || _cardEl)?.remove();
+                    const c = document.getElementById('notes-container');
+                    if (c && !c.querySelector('[id^="note-card-"]')) {
+                        document.getElementById('no-results-state')?.classList.remove('hidden');
+                    }
+                });
+            } catch (err) {
+                showToast(err.error || 'Failed to delete', 'error');
+            }
+        });
+    };
+    window.closeDeleteModal = function() { window.closeModal('delete-modal'); };
+    window.confirmDelete = function(noteId, hasPassword) {
+        if (hasPassword) window.requirePassword(noteId, 'delete');
+        else             window.showDeleteModal(noteId);
+    };
+
+    // â”€â”€â”€ Edit note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.editNote = function(noteId, hasPassword) {
+        if (hasPassword) { window.requirePassword(noteId, 'edit'); return; }
+        const card = document.getElementById(`note-card-${noteId}`);
+        if (card) {
+            card.style.transition = 'transform 0.12s ease, opacity 0.12s ease';
+            card.style.transform  = 'scale(0.97)';
+            card.style.opacity    = '0.7';
+        }
+        setTimeout(() => {
+            if (window.ajaxNav) window.ajaxNav(`/notes/${noteId}/edit`);
+            else location.href = `/notes/${noteId}/edit`;
+        }, 100);
+    };
+
+    // Helper: cập nhật status badge push_pin bên trong card content
+    function _updatePinBadge(card, isPinned) {
+        // Tìm container badge (grid: div.flex.items-center.gap-1, list: div.flex.items-center.gap-0\.5)
+        const badgeRow = card.querySelector('.flex.items-center[class*="gap-"]');
+        if (!badgeRow) return;
+        const existingPin = badgeRow.querySelector('span[title="Pinned"]');
+        if (isPinned) {
+            if (!existingPin) {
+                const span = document.createElement('span');
+                span.className = 'material-icons-outlined text-amber-500';
+                span.style.fontSize = '13px';
+                span.title = 'Pinned';
+                span.textContent = 'push_pin';
+                badgeRow.insertBefore(span, badgeRow.firstChild);
+            }
+        } else {
+            existingPin?.remove();
+        }
+    }
+
+    // --- Toggle Pin -------------------------------------------------------
+    const _pinInFlight = new Set();
+    window.togglePin = async function(noteId) {
+        if (_pinInFlight.has(noteId)) return;
+        _pinInFlight.add(noteId);
+
+        const card    = document.getElementById(`note-card-${noteId}`);
+        if (!card) { _pinInFlight.delete(noteId); return; }
+
+        // .pin-hover-btn là SIBLING của card (trong .note-card-wrapper)
+        const wrapper = card.closest('.note-card-wrapper');
+        const pinBtn  = wrapper ? wrapper.querySelector('.pin-hover-btn') : null;
+        const pinIcon = pinBtn  ? pinBtn.querySelector('.material-icons-outlined') : null;
+        // status badge bên trong card content (hiện icon pin nhỏ)
+        const swipeLabel = wrapper ? wrapper.querySelector('.swipe-pin-reveal .swipe-label') : null;
+
+        const wasPinned = card.dataset.pinned === '1';
+
+        // Optimistic UI
+        card.dataset.pinned = wasPinned ? '0' : '1';
+        if (pinBtn)  { pinBtn.classList.toggle('is-pinned', !wasPinned); pinBtn.title = wasPinned ? 'Pin' : 'Unpin'; }
+        if (pinIcon) { pinIcon.style.color = wasPinned ? '' : '#f59e0b'; }
+        if (swipeLabel) swipeLabel.textContent = wasPinned ? 'Pin' : 'Unpin';
+
+        // Update status badge (push_pin icon in card content)
+        _updatePinBadge(card, !wasPinned);
+
+        try {
+            const result   = await apiCall(`/notes/${noteId}/toggle-pin`, 'POST');
+            const nowPinned = result.is_pinned === true;
+
+            card.dataset.pinned = nowPinned ? '1' : '0';
+            if (pinBtn)  { pinBtn.classList.toggle('is-pinned', nowPinned); pinBtn.title = nowPinned ? 'Unpin' : 'Pin'; }
+            if (pinIcon) { pinIcon.style.color = nowPinned ? '#f59e0b' : ''; }
+            if (swipeLabel) swipeLabel.textContent = nowPinned ? 'Unpin' : 'Pin';
+
+            _updatePinBadge(card, nowPinned);
+            showToast(nowPinned ? 'Note pinned' : 'Note unpinned');
+
+            // Resort: pinned lên đầu, unpinned sort theo created_at giảm dần
+            const container = document.getElementById('notes-container');
+            if (container) {
+                const wrappers = Array.from(container.children).filter(el =>
+                    el.classList.contains('note-card-wrapper') || el.classList.contains('swipe-row')
+                );
+                wrappers.sort((a, b) => {
+                    const aCard = a.querySelector('[data-pinned]');
+                    const bCard = b.querySelector('[data-pinned]');
+                    const aPin = Number(aCard?.dataset.pinned ?? 0);
+                    const bPin = Number(bCard?.dataset.pinned ?? 0);
+                    if (bPin !== aPin) return bPin - aPin; // pinned first
+                    // Same pin group: sort by created_at desc (newest first)
+                    const aTs = Number(aCard?.dataset.noteTs ?? 0);
+                    const bTs = Number(bCard?.dataset.noteTs ?? 0);
+                    return bTs - aTs;
+                });
+                wrappers.forEach(w => container.appendChild(w));
+            }
+        } catch (err) {
+            // Revert
+            card.dataset.pinned = wasPinned ? '1' : '0';
+            if (pinBtn)  { pinBtn.classList.toggle('is-pinned', wasPinned); pinBtn.title = wasPinned ? 'Unpin' : 'Pin'; }
+            if (pinIcon) { pinIcon.style.color = wasPinned ? '#f59e0b' : ''; }
+            _updatePinBadge(card, wasPinned);
+            showToast((err && err.error) || 'Failed to toggle pin', 'error');
+        } finally {
+            _pinInFlight.delete(noteId); // always release lock
+        }
+    };
+
+    // â”€â”€â”€ Session: password_required redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @if(session('password_required'))
+        window.requirePassword({{ session('password_required') }}, 'edit');
+    @endif
+
+    // ─── IndexedDB Offline Sync ───────────────────────────────────────────────
+    // Online: lưu notes vào IDB | Offline: load từ IDB nếu server không có data
+    (async function initOfflineSync() {
+        @php
+        $notesOfflineData = $notes->map(function($n) {
+            return [
+                'id'            => $n->id,
+                'title'         => $n->title ?? '',
+                'content'       => $n->content ?? '',
+                'note_color'    => $n->note_color ?? '#ffffff',
+                'is_pinned'     => (bool) $n->is_pinned,
+                'has_password'  => (bool) $n->has_password,
+                'is_shared'     => $n->shares->count() > 0,
+                'labels'        => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
+                'updated_at'    => $n->updated_at?->diffForHumans() ?? '',
+                'created_at_ts' => $n->created_at?->timestamp ?? 0,
+            ];
+        })->values();
+        @endphp
+        const notesData = @json($notesOfflineData);
+
+        if (navigator.onLine) {
+            // Online: lưu vào IDB để dùng sau khi offline
+            if (window.saveNotesToIDB && notesData.length > 0) {
+                try { await window.saveNotesToIDB(notesData); } catch(e) {}
+            }
+        } else {
+            // Offline: load từ IDB nếu server không trả được data
+            if (notesData.length === 0 && window.getNotesFromIDB) {
+                try {
+                    const offlineNotes = await window.getNotesFromIDB();
+                    if (offlineNotes.length > 0) {
+                        window.renderNotes && window.renderNotes(offlineNotes);
+                        // Hiện banner offline
+                        const banner = document.createElement('div');
+                        banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#fff;padding:8px 20px;border-radius:999px;font-size:13px;font-weight:600;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,0.2);white-space:nowrap;';
+                        banner.textContent = '📶 Offline — Showing cached notes';
+                        document.body.appendChild(banner);
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // Khi có mạng lại → reload để sync
+        window.addEventListener('online',  () => { showToast('Back online — syncing...'); setTimeout(() => location.reload(), 1200); });
+        window.addEventListener('offline', () => showToast('You are offline — showing cached notes', 'error'));
+    })();
+
+})(); // end IIFE
+</script>
+@endpush
+@endsection

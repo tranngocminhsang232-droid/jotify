@@ -80,7 +80,7 @@
         }
 
         /* Body fade-in on first load */
-        body { opacity: 0; transition: opacity 0.12s ease; }
+        body { opacity: 1; transition: opacity 0.12s ease; }
         body.app-ready { opacity: 1; }
 
         /* Viewport wrapper — clip slide ngang */

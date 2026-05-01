@@ -23,8 +23,10 @@ class ShareController extends Controller
         $user = Auth::user();
         $sharedNotes = NoteShare::where('recipient_id', $user->id)
             ->with(['note', 'owner'])
-            ->orderBy('shared_at', 'desc')
-            ->get();
+            ->get()
+            // Order by note's updated_at so recently-edited notes surface first
+            ->sortByDesc(fn($s) => $s->note?->updated_at ?? $s->shared_at)
+            ->values();
 
         $preferences = $user->preferences()->firstOrCreate([], [
             'font_size' => 'medium', 'note_color' => '#ffffff',

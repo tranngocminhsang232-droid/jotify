@@ -146,11 +146,12 @@
             <p class="text-xs text-muted mb-3 italic">🔒 Content is password protected</p>
             @endif
 
-            {{-- Footer: owner info + time --}}
+            {{-- Footer: owner info + last-modified time --}}
             <div class="flex items-center gap-2 pt-2 border-t border-border/50 mt-auto">
                 <img src="{{ $share->owner->avatar_url }}" class="w-5 h-5 rounded-full flex-shrink-0" alt="">
                 <span class="text-[11px] text-muted truncate flex-1">{{ $share->owner->display_name }}</span>
-                <span class="text-[10px] text-muted flex-shrink-0">{{ $share->shared_at->diffForHumans() }}</span>
+                {{-- Show note's updated_at, not share's shared_at --}}
+                <span class="text-[10px] text-muted flex-shrink-0">{{ ($share->note->updated_at ?? $share->shared_at)->diffForHumans() }}</span>
             </div>
         </div>
 
@@ -176,7 +177,8 @@
                 <div class="flex items-center gap-2 mt-0.5">
                     <img src="{{ $share->owner->avatar_url }}" class="w-4 h-4 rounded-full flex-shrink-0" alt="">
                     <span class="text-[11px] text-muted truncate">{{ $share->owner->display_name }}</span>
-                    <span class="text-[10px] text-muted ml-auto flex-shrink-0">{{ $share->shared_at->diffForHumans() }}</span>
+                    {{-- Show note's updated_at, not share's shared_at --}}
+                    <span class="text-[10px] text-muted ml-auto flex-shrink-0">{{ ($share->note->updated_at ?? $share->shared_at)->diffForHumans() }}</span>
                 </div>
             </div>
         </div>

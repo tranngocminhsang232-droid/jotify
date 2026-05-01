@@ -179,8 +179,7 @@ function sharedEditorData() {
                 statusEl.innerHTML =
                     '<span class="material-icons-outlined text-sm text-emerald-500">cloud_done</span> Saved ' +
                     result.updated_at;
-                // Invalidate prefetch cache để B thấy updated time ở trang Shared with Me
-                if (window._prefetchCache) window._prefetchCache.delete('/shared');
+                // Bust prefetch cache so the Shared-with-Me list shows fresh updated_at
                 if (window._ajaxPrefetchCache) {
                     delete window._ajaxPrefetchCache['/shared'];
                     delete window._ajaxPrefetchCache[window.location.origin + '/shared'];

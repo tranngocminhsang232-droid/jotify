@@ -1,0 +1,835 @@
+/* ── Self-hosted fonts (bundled via npm, no Google CDN needed) ────────────── */
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/inter/800.css';
+/* Note: material-icons is imported in app.js (Vite JS context) */
+
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ============================
+   NOTEKEEPER — DESIGN SYSTEM
+   Natural Green Theme (No Glow)
+   ============================ */
+
+:root {
+    /* Green accent — natural, no neon */
+    --accent: #22c55e;
+    --accent-dim: #16a34a;
+    --accent-subtle: rgba(34, 197, 94, 0.15);
+    --accent-border: rgba(34, 197, 94, 0.3);
+
+    /* Custom background color (set via JS for color picker) */
+    --bg-custom: none;
+
+    /* === LIGHT THEME (default) === */
+    --color-body-bg:    #f0fdf4;
+    --color-body-text:  #052e16;        /* tối hơn — contrast cao hơn */
+    --color-muted:      #166534;        /* xanh đậm, dễ đọc trên nền sáng */
+    --color-card:       #ffffff;
+    --color-sidebar:    #f7fef9;
+    --color-header:     rgba(255, 255, 255, 0.97);
+    --color-border:     #bbf7d0;
+    --color-hover:      #dcfce7;
+    --color-input-bg:   #f0fdf4;
+    --color-input-border: #86efac;
+    --sidebar-border:   rgba(34, 197, 94, 0.2);
+    --header-border:    rgba(34, 197, 94, 0.15);
+}
+
+/* === DARK THEME === */
+.dark {
+    --color-body-bg:    #071910;
+    --color-body-text:  #f0fdf4;        /* gần trắng — rõ nét trên nền tối */
+    --color-muted:      #a3e6bb;        /* xanh nhạt đủ sáng, dễ đọc */
+    --color-card:       #0d2318;
+    --color-sidebar:    #081d12;
+    --color-header:     rgba(7, 25, 16, 0.97);
+    --color-border:     #1a3d28;
+    --color-hover:      #102a1c;
+    --color-input-bg:   #0a1e13;
+    --color-input-border: #2d5a3d;
+    --sidebar-border:   rgba(34, 197, 94, 0.18);
+    --header-border:    rgba(34, 197, 94, 0.14);
+}
+
+/* Smooth theme transition cho tất cả elements */
+*, *::before, *::after {
+    transition:
+        color            0.25s ease,
+        background-color 0.25s ease,
+        border-color     0.25s ease,
+        box-shadow       0.25s ease;
+}
+/* Ngoại lệ: animations và transforms không bị override */
+[class*="animate-"], [class*="slide-"], .ripple {
+    transition: none !important;
+}
+
+/* Selection color */
+::selection {
+    background: var(--accent-subtle);
+    color: var(--accent-dim);
+}
+
+/* ══════════════════════════════════════════════════════
+   GLOBAL FOCUS OVERRIDE — xanh lá TOÀN SITE
+   Xóa viền xanh dương của browser, thay bằng xanh lá
+   ══════════════════════════════════════════════════════ */
+
+/* 1. Xóa outline mặc định cho TẤT CẢ element */
+*:focus          { outline: none; }
+*:focus-visible  { outline: none; }
+
+/* 2. Button / link / role=button: chỉ dùng glow xanh lá (không border) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 2px;
+    border-radius: 6px;
+    box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+}
+
+/* 3. Input / textarea / select: border + glow xanh lá */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+    outline: none !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+    background-color: var(--color-hover) !important;
+    color: var(--color-body-text) !important;
+}
+
+/* 4. Custom div/span giả input (contenteditable, custom dropdown...) */
+[contenteditable]:focus,
+[contenteditable]:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 0;
+    box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+}
+
+/* Smooth cursor on interactive elements */
+a, button, [role="button"], label[for] {
+    cursor: pointer;
+}
+
+/* Links */
+a {
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+/* ============================
+   BASE STYLES
+   ============================ */
+
+.bg-body    { background-color: var(--color-body-bg); }
+.text-body  { color: var(--color-body-text); }
+.text-muted { color: var(--color-muted); }
+.bg-card    { background-color: var(--color-card); }
+.bg-sidebar { background-color: var(--color-sidebar); }
+.bg-header  { background-color: var(--color-header); }
+.border-border { border-color: var(--color-border); }
+.bg-hover   { background-color: var(--color-hover); }
+
+/* ============================
+   COMPONENTS — NAVIGATION LINKS
+   ============================ */
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    /* Tất cả property được transition riêng để GPU tối ưu tốt hơn */
+    transition:
+        background-color 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        color            0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color     0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        transform        0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+    text-decoration: none;
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+    will-change: transform;
+}
+.nav-link:hover {
+    background-color: var(--accent-subtle);
+    color: var(--accent-dim);
+    border-color: var(--accent-border);
+    transform: translateX(2px);
+}
+.nav-link:active {
+    transform: translateX(1px) scale(0.98);
+}
+.nav-link.active {
+    background-color: var(--accent-subtle);
+    color: var(--accent-dim);
+    font-weight: 600;
+    border-color: var(--accent-border);
+}
+/* Icon bên trong nav-link — chỉ scale nhẹ */
+.nav-link span.material-icons-outlined {
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: inline-block;
+}
+.nav-link:hover span.material-icons-outlined {
+    transform: scale(1.15);
+}
+.nav-link:active span.material-icons-outlined {
+    transform: scale(0.92);
+}
+
+/* ============================
+   VIEW TOGGLE BUTTONS (Grid / List)
+   ============================ */
+
+.view-toggle-btn {
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.625rem;
+    color: var(--color-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition:
+        color            0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        background-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        transform        0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow       0.2s  cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+}
+.view-toggle-btn:hover:not(.active) {
+    color: var(--color-body-text);
+    background: var(--accent-subtle);
+    transform: scale(1.08);
+}
+.view-toggle-btn.active {
+    background: var(--accent-dim);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(34,197,94,0.3);
+    transform: scale(1.05);
+}
+.view-toggle-btn:active {
+    transform: scale(0.92) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Label chips — bounce spring */
+.label-chip {
+    transition:
+        background-color 0.2s  cubic-bezier(0.4, 0, 0.2, 1),
+        color            0.2s  cubic-bezier(0.4, 0, 0.2, 1),
+        border-color     0.2s  cubic-bezier(0.4, 0, 0.2, 1),
+        transform        0.28s cubic-bezier(0.34, 1.72, 0.64, 1),
+        box-shadow       0.2s  cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+}
+.label-chip:hover {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 12px rgba(34,197,94,0.15);
+}
+.label-chip:active {
+    transform: scale(0.95);
+    transition-duration: 0.08s;
+}
+
+/* ╔═══════════════════════════════════════════════════════════╗
+   ║   BUTTONS — Premium micro-animation system               ║
+   ║   Spring physics + GPU-accelerated transforms            ║
+   ╚═══════════════════════════════════════════════════════════╝ */
+
+/* --- Shared ripple base --- */
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+    position: relative;
+    overflow: hidden;          /* ← ripple cần cái này */
+    will-change: transform;    /* GPU layer */
+    -webkit-tap-highlight-color: transparent;
+}
+/* Ripple pseudo — được tạo bằng JS (xem app.js) */
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    animation: ripple-expand 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    opacity: 0.28;
+}
+@keyframes ripple-expand {
+    to { transform: scale(4); opacity: 0; }
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background: #22c55e;
+    color: #ffffff !important;
+    text-decoration: none;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition:
+        background  0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow  0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        transform   0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    letter-spacing: 0.01em;
+    user-select: none;
+    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3);
+}
+.btn-primary:hover {
+    background: #16a34a;
+    transform: translateY(-2px) scale(1.025);
+    box-shadow: 0 8px 24px rgba(34,197,94,0.4), 0 2px 8px rgba(34,197,94,0.2);
+}
+.btn-primary:active {
+    transform: translateY(0) scale(0.96);
+    box-shadow: 0 1px 4px rgba(34,197,94,0.15);
+    background: #16a34a;
+    transition-duration: 0.08s;
+}
+.btn-primary:focus-visible {
+    outline: 2.5px solid #22c55e;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(34,197,94,0.15);
+}
+/* Dark mode — sáng hơn để nổi trên nền tối */
+.dark .btn-primary { background: #22c55e; box-shadow: 0 4px 18px rgba(34,197,94,0.4); }
+.dark .btn-primary:hover { background: #4ade80; }
+/* Icon bên trong nút — scale nhẹ */
+.btn-primary .material-icons-outlined {
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-primary:hover .material-icons-outlined {
+    transform: scale(1.12);
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background-color: transparent;
+    color: var(--accent-dim);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1.5px solid var(--accent-border);
+    cursor: pointer;
+    transition:
+        background  0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        color        0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        transform    0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow   0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+}
+.btn-secondary:hover {
+    background-color: var(--accent-subtle);
+    border-color: var(--accent-dim);
+    transform: translateY(-1.5px) scale(1.015);
+    box-shadow: 0 4px 14px rgba(34,197,94,0.12);
+}
+.btn-secondary:active {
+    transform: translateY(0) scale(0.97);
+    transition-duration: 0.08s;
+}
+.btn-secondary:focus-visible {
+    outline: 2.5px solid var(--accent);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+.btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background: #ef4444;
+    color: #ffffff;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition:
+        background  0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow  0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        transform   0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
+}
+.btn-danger:hover {
+    background: #dc2626;
+    transform: translateY(-2px) scale(1.025);
+    box-shadow: 0 8px 20px rgba(239,68,68,0.35), 0 2px 6px rgba(239,68,68,0.2);
+}
+.btn-danger:active {
+    transform: translateY(0) scale(0.96);
+    box-shadow: 0 1px 4px rgba(239,68,68,0.15);
+    transition-duration: 0.08s;
+}
+.btn-danger:focus-visible {
+    outline: 2.5px solid #ef4444;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(239,68,68,0.15);
+}
+
+/* ============================
+   FORM INPUTS
+   ============================ */
+
+.form-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background-color: var(--color-input-bg);
+    border: 1.5px solid var(--color-input-border);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-body-text);
+    outline: none;
+    transition:
+        border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow   0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        background   0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        transform    0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: box-shadow;
+}
+.form-input:hover {
+    border-color: color-mix(in srgb, var(--color-input-border) 60%, var(--accent) 40%);
+}
+.form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+    transform: translateY(-1px);
+}
+
+/* Auth page inputs */
+.auth-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--color-input-bg);
+    border: 1.5px solid var(--color-input-border);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-body-text);
+    outline: none;
+    transition:
+        border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow   0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        background   0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        transform    0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: box-shadow;
+}
+.auth-input::placeholder {
+    color: var(--color-muted);
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+.auth-input:focus::placeholder {
+    opacity: 0.4;
+}
+.auth-input:hover {
+    border-color: color-mix(in srgb, var(--color-input-border) 50%, var(--accent) 50%);
+}
+.auth-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+    background: var(--color-hover);
+    transform: translateY(-1px);
+}
+/* Padding-left preset for inputs with leading icon */
+.auth-input.pl-10,
+.form-input.pl-10 {
+    padding-left: 2.75rem;
+}
+/* Icon absolute bên trong wrapper relative — luôn nổi trên input kể cả khi
+   input dùng transform (transform tạo stacking context mới) */
+.relative > span.material-icons-outlined {
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* ============================
+   AUTOFILL OVERRIDE
+   Chrome/Safari tự điền màu xanh dương — override bằng màu theme JOTIFY
+   Trick: dùng box-shadow inset lớn để che background gốc
+   ============================ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+    /* Nền: dùng inset shadow rất lớn để che background xanh dương của Chrome */
+    -webkit-box-shadow:
+        0 0 0px 1000px var(--color-hover) inset,
+        0 0 0 3px var(--accent-subtle) !important;
+    box-shadow:
+        0 0 0px 1000px var(--color-hover) inset,
+        0 0 0 3px var(--accent-subtle) !important;
+    /* Text color */
+    -webkit-text-fill-color: var(--color-body-text) !important;
+    color: var(--color-body-text) !important;
+    /* Border xanh lá */
+    border-color: var(--accent) !important;
+    outline: none !important;
+    caret-color: var(--color-body-text);
+    transition: background-color 99999s ease-in-out 0s;
+}
+
+/* ============================
+   GLOBAL ICON COLOR SYSTEM
+   Icons always visible on both light & dark modes.
+   All material-icons-outlined inherit color from parent by default.
+   Use .icon-accent / .icon-muted / .icon-danger for semantic colors.
+   ============================ */
+
+/* Base: icons inherit from parent text color — guaranteed visible */
+.material-icons-outlined {
+    color: inherit;
+    transition: color 0.22s ease;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+/* Theme-aware semantic icon colors — adapt automatically on mode switch */
+.icon-themed   { color: var(--color-muted) !important; }
+.icon-accent   { color: var(--accent-dim)  !important; }
+.icon-body     { color: var(--color-body-text) !important; }
+.icon-danger   { color: #ef4444 !important; }
+.icon-warning  { color: #f59e0b !important; }
+.icon-success  { color: #22c55e !important; }
+.icon-info     { color: #3b82f6 !important; }
+
+/* nav-link icons: muted by default, accent on hover/active — smooth swap */
+.nav-link .material-icons-outlined {
+    color: var(--color-muted);
+    transition: color 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nav-link:hover .material-icons-outlined,
+.nav-link.active .material-icons-outlined {
+    color: var(--accent-dim);
+}
+
+/* icon-btn base uses muted, hover goes accent — already handled but reinforce */
+.icon-btn .material-icons-outlined {
+    color: var(--color-muted);
+}
+.icon-btn:hover .material-icons-outlined {
+    color: var(--accent-dim);
+}
+
+/* Header utility buttons (hamburger, dark-mode toggle) */
+.header-icon-btn .material-icons-outlined {
+    color: var(--color-muted);
+    transition: color 0.18s ease;
+}
+.header-icon-btn:hover .material-icons-outlined {
+    color: var(--color-body-text);
+}
+
+/* ============================
+   THEME-AWARE UTILITY CLASSES
+   ============================ */
+
+.sidebar-section-label {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.sidebar-username {
+    color: var(--color-body-text);
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.sidebar-email {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+}
+
+.icon-btn {
+    color: var(--color-muted);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        color            0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        background-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+        transform        0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.icon-btn:hover {
+    color: var(--accent-dim);
+    background: var(--accent-subtle);
+    transform: scale(1.12);
+}
+.icon-btn:active {
+    transform: scale(0.88);
+    transition-duration: 0.08s;
+}
+/* Icon — chỉ scale, không xoay */
+.icon-btn .material-icons-outlined {
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: inline-block;
+}
+.icon-btn:hover .material-icons-outlined {
+    transform: scale(1.15);
+}
+.icon-btn:active .material-icons-outlined {
+    transform: scale(0.88);
+}
+
+/* ============================
+   CARD
+   ============================ */
+
+.card-neon {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    transition: border-color 0.2s ease;
+}
+.card-neon:hover {
+    border-color: var(--accent-border);
+}
+
+/* ============================
+   NOTE CARD — reliable hover styles
+   (works for both server-rendered AND JS-injected cards)
+   ============================ */
+
+.note-card-grid {
+    background: var(--color-card);
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition:
+        border-color  0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform     0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow    0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: transform;
+}
+@media (hover: hover) {
+    .note-card-grid:hover {
+        border-color: rgba(34, 197, 94, 0.45);
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 0 12px 32px rgba(34, 197, 94, 0.18), 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .note-card-grid:active {
+        transform: scale(0.97);
+        transition-duration: 0.1s;
+    }
+}
+
+.note-card-list {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition:
+        border-color  0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background    0.25s ease,
+        box-shadow    0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform     0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: transform;
+}
+@media (hover: hover) {
+    .note-card-list:hover {
+        border-color: rgba(34, 197, 94, 0.45);
+        background: color-mix(in srgb, var(--color-card) 95%, var(--accent) 5%);
+        box-shadow: 0 4px 16px rgba(34, 197, 94, 0.12);
+        transform: scale(1.02);
+    }
+    .note-card-list:active {
+        transform: scale(0.98);
+        transition-duration: 0.1s;
+    }
+}
+
+/* Action buttons inside note cards — show on hover of parent card */
+.note-card-grid .note-actions,
+.note-card-list .note-actions {
+    opacity: 1; /* always visible on mobile (touch) */
+}
+@media (min-width: 640px) {
+    .note-card-grid .note-actions,
+    .note-card-list .note-actions {
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+    .note-card-grid:hover .note-actions,
+    .note-card-list:hover .note-actions {
+        opacity: 1;
+    }
+}
+
+/* ============================
+   SCROLLBAR
+   ============================ */
+
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--accent-border);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-dim);
+}
+
+/* ============================
+   ANIMATIONS
+   ============================ */
+
+@keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.animate-slide-up {
+    animation: slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes slide-down {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+    animation: slide-down 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes scale-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+    animation: scale-in 0.25s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--color-hover) 25%,
+        color-mix(in srgb, var(--color-hover) 70%, var(--accent-subtle) 30%) 50%,
+        var(--color-hover) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+    border-radius: 0.5rem;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.animate-fade-in {
+    animation: fade-in 0.3s ease forwards;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* ============================
+   LINE CLAMP
+   ============================ */
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+
+@media (max-width: 640px) {
+    .btn-primary, .btn-secondary, .btn-danger {
+        font-size: 0.8125rem;
+        padding: 0.5rem 1rem;
+    }
+}
+
+/* ============================
+   REDUCED MOTION — accessibiliy
+   ============================ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .ripple { display: none !important; }
+}

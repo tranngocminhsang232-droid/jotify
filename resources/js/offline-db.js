@@ -5,13 +5,14 @@
 import { openDB } from 'idb';
 
 const DB_NAME    = 'jotify-offline';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORE_NOTES    = 'notes';
 const STORE_CREATES  = 'pending_creates';   // notes tạo offline, chờ sync
 const STORE_UPDATES  = 'pending_updates';   // notes sửa offline, chờ sync
 const STORE_LABELS   = 'labels';            // cache labels của user
 const STORE_PREFS    = 'preferences';       // cache preferences
+const STORE_PROFILE  = 'profile';           // offline profile cache + pending update
 
 function getDB() {
     return openDB(DB_NAME, DB_VERSION, {
@@ -35,6 +36,13 @@ function getDB() {
                 }
                 if (!db.objectStoreNames.contains(STORE_PREFS)) {
                     db.createObjectStore(STORE_PREFS, { keyPath: 'key' });
+                }
+            }
+            // v3 stores
+            if (oldVersion < 3) {
+                if (!db.objectStoreNames.contains(STORE_PROFILE)) {
+                    // key = 'current' for cached data, 'pending' for queued update
+                    db.createObjectStore(STORE_PROFILE, { keyPath: 'key' });
                 }
             }
 
@@ -268,3 +276,61 @@ export async function getPreferencesFromIDB() {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// PROFILE — offline cache + pending update queue
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Save current profile data locally (called when online, key='current') */
+export async function saveProfileToIDB(profile) {
+    try {
+        const db = await getDB();
+        await db.put(STORE_PROFILE, { key: 'current', ...profile, savedAt: Date.now() });
+    } catch (e) {
+        console.warn('[IDB] saveProfileToIDB failed:', e);
+    }
+}
+
+/** Get cached profile data */
+export async function getProfileFromIDB() {
+    try {
+        const db = await getDB();
+        return await db.get(STORE_PROFILE, 'current') ?? null;
+    } catch (e) {
+        console.warn('[IDB] getProfileFromIDB failed:', e);
+        return null;
+    }
+}
+
+/**
+ * Queue a profile update to sync when back online.
+ * @param {{ display_name: string, avatarDataUrl: string|null }} data
+ */
+export async function queueProfileUpdate(data) {
+    try {
+        const db = await getDB();
+        await db.put(STORE_PROFILE, { key: 'pending', ...data, queuedAt: Date.now() });
+    } catch (e) {
+        console.warn('[IDB] queueProfileUpdate failed:', e);
+    }
+}
+
+/** Get pending profile update (null if none) */
+export async function getProfileQueue() {
+    try {
+        const db = await getDB();
+        return await db.get(STORE_PROFILE, 'pending') ?? null;
+    } catch (e) {
+        console.warn('[IDB] getProfileQueue failed:', e);
+        return null;
+    }
+}
+
+/** Remove pending profile update after successful sync */
+export async function clearProfileQueue() {
+    try {
+        const db = await getDB();
+        await db.delete(STORE_PROFILE, 'pending');
+    } catch (e) {
+        console.warn('[IDB] clearProfileQueue failed:', e);
+    }
+}

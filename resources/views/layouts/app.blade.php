@@ -803,7 +803,7 @@
     @stack('scripts')
 
     <script data-layout="1">
-    // ── Service Worker: register + force update ngay khi có version mới ──
+    // ── Service Worker: register + force update + pre-warm profile pages ──
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('{{ asset('sw.js') }}')
@@ -817,6 +817,22 @@
                         });
                     });
                     reg.update(); // check for new version on each load
+                    // Pre-warm profile + offline note shell into cache
+                    @auth
+                    if (navigator.serviceWorker.controller) {
+                        navigator.serviceWorker.controller.postMessage({
+                            type: 'CACHE_PAGES',
+                            pages: ['/profile', '/profile/edit', '/offline-note.html']
+                        });
+                    }
+                    // Also cache on controller change (first activation)
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        navigator.serviceWorker.controller?.postMessage({
+                            type: 'CACHE_PAGES',
+                            pages: ['/profile', '/profile/edit', '/offline-note.html']
+                        });
+                    });
+                    @endauth
                 })
                 .catch(err => console.warn('SW registration failed:', err));
         });

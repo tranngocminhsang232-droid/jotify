@@ -10,6 +10,8 @@ import {
     removePendingCreate, removePendingUpdate,
     saveLabelsToIDB, getLabelsFromIDB,
     savePreferencesToIDB, getPreferencesFromIDB,
+    saveProfileToIDB, getProfileFromIDB,
+    queueProfileUpdate, getProfileQueue, clearProfileQueue,
 } from './offline-db.js';
 
 // Fonts: Inter bundled via @fontsource in app.css, Material Icons served from public/fonts/
@@ -59,6 +61,12 @@ window.saveLabelsToIDB       = saveLabelsToIDB;
 window.getLabelsFromIDB      = getLabelsFromIDB;
 window.savePreferencesToIDB  = savePreferencesToIDB;
 window.getPreferencesFromIDB = getPreferencesFromIDB;
+// Profile offline helpers
+window.saveProfileToIDB  = saveProfileToIDB;
+window.getProfileFromIDB = getProfileFromIDB;
+window.queueProfileUpdate = queueProfileUpdate;
+window.getProfileQueue    = getProfileQueue;
+window.clearProfileQueue  = clearProfileQueue;
 
 
 /* ══════════════════════════════════════════════════════════════

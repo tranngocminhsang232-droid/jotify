@@ -611,6 +611,29 @@
 var noteId = {{ $note->id }};
 var currentLabels = @json($note->labels->pluck('id'));
 
+// ─── Offline IDB hydration: restore latest local edits on load ───────────────
+// If offline and we have a queued update for this note, show local version.
+(async function() {
+    if (navigator.onLine) return;
+    if (!window.getPendingUpdates) return; // app.js not ready yet — retry below
+    function _hydrate() {
+        if (!window.getPendingUpdates) return;
+        window.getPendingUpdates().then(function(pending) {
+            var hit = pending.find(function(p) { return String(p.noteId) === String(noteId); });
+            if (!hit) return;
+            var t = document.getElementById('note-title');
+            var c = document.getElementById('note-content');
+            if (t && hit.title   !== undefined) t.value = hit.title;
+            if (c && hit.content !== undefined) c.value = hit.content;
+            var s = document.getElementById('save-status');
+            if (s) s.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500">cloud_upload</span> Offline — local edits loaded';
+        }).catch(function(){});
+    }
+    // Try immediately; if app.js not ready yet, retry after a short delay
+    if (window.getPendingUpdates) { _hydrate(); }
+    else { setTimeout(_hydrate, 600); }
+})();
+
 // ─── Fallback autosave (hoạt động độc lập với Alpine.js) ─────────────────────
 // Đảm bảo autosave luôn chạy dù Alpine có init thành công hay không
 (function() {

@@ -109,6 +109,100 @@ function previewAvatar(input) {
     if (!input.files || !input.files[0]) return;
     document.getElementById('avatar-preview').src = URL.createObjectURL(input.files[0]);
 }
+
+(function () {
+    const form = document.querySelector('form[action="/profile"]');
+    if (!form) return;
+
+    // ── When online: persist current profile data to IDB so offline fallback works ──
+    if (navigator.onLine && window.saveProfileToIDB) {
+        window.saveProfileToIDB({
+            display_name: form.querySelector('[name="display_name"]')?.value ?? '',
+            email:        form.querySelector('[name="email"]')?.value ?? '',
+            avatar_url:   document.getElementById('avatar-preview')?.src ?? '',
+        });
+    }
+
+    // ── When offline: fill form from IDB cache ────────────────────────────────
+    if (!navigator.onLine && window.getProfileFromIDB) {
+        window.getProfileFromIDB().then(profile => {
+            if (!profile) return;
+            const nameInput  = form.querySelector('[name="display_name"]');
+            const emailInput = form.querySelector('[name="email"]');
+            if (nameInput  && !nameInput.value)  nameInput.value  = profile.display_name ?? '';
+            if (emailInput && !emailInput.value) emailInput.value = profile.email ?? '';
+            const avatar = document.getElementById('avatar-preview');
+            if (avatar && profile.avatar_url) avatar.src = profile.avatar_url;
+        });
+    }
+
+    // ── Intercept submit when offline ─────────────────────────────────────────
+    form.addEventListener('submit', async function (e) {
+        if (navigator.onLine) return; // let browser handle it normally
+
+        e.preventDefault();
+
+        const display_name = form.querySelector('[name="display_name"]')?.value ?? '';
+        const email        = form.querySelector('[name="email"]')?.value ?? '';
+
+        // Store avatar as data URL if the user picked a new one
+        let avatarDataUrl = null;
+        const avatarInput = document.getElementById('avatar-file-input');
+        if (avatarInput?.files?.[0]) {
+            avatarDataUrl = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(avatarInput.files[0]);
+            });
+        }
+
+        if (window.queueProfileUpdate) {
+            await window.queueProfileUpdate({ display_name, email, avatarDataUrl });
+            // Update the cached profile too so the page reflects the new name
+            if (window.saveProfileToIDB) {
+                await window.saveProfileToIDB({
+                    display_name,
+                    email,
+                    avatar_url: avatarDataUrl ?? document.getElementById('avatar-preview')?.src ?? '',
+                });
+            }
+        }
+
+        if (window.showToast) {
+            window.showToast('You are offline. Changes saved locally and will sync when back online.', 'info');
+        }
+    });
+
+    // ── On reconnect: sync queued profile update ──────────────────────────────
+    window.addEventListener('online', async () => {
+        if (!window.getProfileQueue || !window.clearProfileQueue) return;
+        const pending = await window.getProfileQueue();
+        if (!pending) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('_method', 'PUT');
+            formData.append('_token', window.csrfToken ?? document.querySelector('meta[name="csrf-token"]')?.content ?? '');
+            formData.append('display_name', pending.display_name ?? '');
+            formData.append('email', pending.email ?? '');
+
+            // If user chose a new avatar, convert data URL back to Blob
+            if (pending.avatarDataUrl) {
+                const res = await fetch(pending.avatarDataUrl);
+                const blob = await res.blob();
+                formData.append('avatar', blob, 'avatar.jpg');
+            }
+
+            const response = await fetch('/profile', { method: 'POST', body: formData });
+            if (response.ok) {
+                await window.clearProfileQueue();
+                if (window.showToast) window.showToast('Profile synced successfully!', 'success');
+            }
+        } catch (err) {
+            console.warn('[Profile] Sync failed, will retry on next reconnect:', err);
+        }
+    });
+})();
 </script>
 
 </div>

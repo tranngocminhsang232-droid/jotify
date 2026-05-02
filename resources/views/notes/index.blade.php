@@ -1194,19 +1194,46 @@
         const actionEl = document.getElementById('unlock-action');
         const pwEl     = document.getElementById('unlock-password');
         const errEl    = document.getElementById('unlock-error');
+        // Always reset full state so stale noteId/password/type from previous note are cleared
         if (noteIdEl) noteIdEl.value = noteId;
         if (actionEl) actionEl.value = action;
-        if (pwEl)     pwEl.value = '';
+        if (pwEl) {
+            pwEl.value = '';
+            pwEl.type  = 'password'; // reset eye-toggle — togglePassVis may have left it as 'text'
+        }
         if (errEl)    errEl.classList.add('hidden');
+        // Reset eye icon if present
+        const eyeIcon = document.getElementById('unlock-pw-eye');
+        if (eyeIcon) eyeIcon.textContent = 'visibility';
         window.openModal('password-modal');
         setTimeout(() => { if (pwEl) pwEl.focus(); }, 80);
     };
-    window.closePasswordModal = function() { window.closeModal('password-modal'); };
+    window.closePasswordModal = function() {
+        // Fully reset form so Cancel leaves no stale state for next open
+        const pwEl  = document.getElementById('unlock-password');
+        const errEl = document.getElementById('unlock-error');
+        if (pwEl)  { pwEl.value = ''; pwEl.type = 'password'; }
+        if (errEl) errEl.classList.add('hidden');
+        const eyeIcon = document.getElementById('unlock-pw-eye');
+        if (eyeIcon) eyeIcon.textContent = 'visibility';
+        window.closeModal('password-modal');
+    };
     window.unlockNote = async function(e) {
         e.preventDefault();
         const noteId   = document.getElementById('unlock-note-id')?.value;
         const password = document.getElementById('unlock-password')?.value;
         const action   = document.getElementById('unlock-action')?.value;
+        const errEl    = document.getElementById('unlock-error');
+        // Guard: empty password bypasses HTML required because e.preventDefault() is called first
+        if (!password || !password.trim()) {
+            if (errEl) { errEl.textContent = 'Password is required.'; errEl.classList.remove('hidden'); }
+            return;
+        }
+        // Guard: missing noteId means stale/broken state — do not send request
+        if (!noteId) {
+            if (errEl) { errEl.textContent = 'Invalid note. Please try again.'; errEl.classList.remove('hidden'); }
+            return;
+        }
         try {
             if (navigator.onLine) {
                 // Online: verify via server API
@@ -1234,7 +1261,6 @@
                 window.showDeleteModal(noteId);
             }
         } catch (err) {
-            const errEl = document.getElementById('unlock-error');
             if (errEl) { errEl.textContent = err.error || 'Incorrect password'; errEl.classList.remove('hidden'); }
         }
     };

@@ -179,7 +179,9 @@
 </style>
 
 <script>
-// ── Cập nhật ngay label filter chips + sidebar mà không cần reload ──────────
+// Guard: AJAX nav re-executes body scripts on every navigation — run only once
+if (!window._labelModalScriptInit) {
+window._labelModalScriptInit = true;
 function _refreshLabelUI(labels) {
     // 1) Label filter chips (#label-chips trên trang notes/index)
     let chipsWrap = document.getElementById('label-chips');
@@ -489,4 +491,5 @@ function closeLabelManager() {
         window.location.reload();
     }
 }
+} // end _labelModalScriptInit guard
 </script>

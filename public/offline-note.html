@@ -171,6 +171,8 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { display: inline-block; animation: spin 0.7s linear infinite; }
     </style>
+    <!-- bcryptjs loaded locally — SW caches static .js files -->
+    <script src="/js/bcryptjs.js"></script>
 </head>
 <body>
 <header>
@@ -198,7 +200,19 @@
         <a href="/notes">← Back to Notes</a>
     </div>
 
-    <div id="editor-wrap">
+    <div id="pw-gate" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1rem;text-align:center;gap:1rem;">
+        <span style="font-size:2.5rem;">🔒</span>
+        <h2 style="margin:0;font-size:1.25rem;">Password Protected</h2>
+        <p style="color:var(--muted);margin:0;font-size:0.875rem;">Enter the password to access this note offline.</p>
+        <form id="pw-gate-form" style="display:flex;flex-direction:column;gap:0.75rem;width:100%;max-width:320px;margin-top:0.5rem;">
+            <input type="password" id="pw-gate-input" placeholder="Note password…" autocomplete="off"
+                   style="width:100%;padding:0.6rem 0.9rem;border-radius:0.6rem;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:0.9rem;outline:none;">
+            <div id="pw-gate-error" style="display:none;color:#ef4444;font-size:0.8rem;"></div>
+            <button type="submit" style="background:var(--accent);color:#fff;border:none;padding:0.55rem 1rem;border-radius:0.6rem;font-weight:700;font-size:0.85rem;cursor:pointer;">Unlock</button>
+        </form>
+    </div>
+
+    <div id="editor-wrap" style="display:none;">
         <input type="text" id="note-title" placeholder="Note title…" autocomplete="off">
         <textarea id="note-content" placeholder="Start writing…"></textarea>
     </div>
@@ -287,6 +301,48 @@ async function init() {
         return;
     }
 
+    // Password gate — verify before showing content
+    if (note.has_password && note.note_password) {
+        // Check if already unlocked via main app session flag
+        const wasUnlocked = sessionStorage.getItem('offline_unlocked_' + noteId);
+        if (!wasUnlocked) {
+            document.getElementById('pw-gate').style.display = 'flex';
+            document.getElementById('pw-gate-input').focus();
+            document.getElementById('pw-gate-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const pw = document.getElementById('pw-gate-input').value;
+                const errEl = document.getElementById('pw-gate-error');
+                try {
+                    // Use locally loaded bcryptjs (cached by SW as static asset)
+                    if (!window.bcrypt || !window.bcrypt.compareSync) {
+                        errEl.textContent = 'Password verification unavailable offline.';
+                        errEl.style.display = 'block';
+                        return;
+                    }
+                    if (!window.bcrypt.compareSync(pw, note.note_password)) {
+                        errEl.textContent = 'Incorrect password.';
+                        errEl.style.display = 'block';
+                        document.getElementById('pw-gate-input').value = '';
+                        document.getElementById('pw-gate-input').focus();
+                        return;
+                    }
+                } catch(_) {
+                    errEl.textContent = 'Password verification unavailable offline.';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                sessionStorage.setItem('offline_unlocked_' + noteId, '1');
+                document.getElementById('pw-gate').style.display = 'none';
+                showEditor(note);
+            };
+            return; // wait for password submission
+        }
+    }
+
+    showEditor(note);
+}
+
+function showEditor(note) {
     // Populate editor
     document.getElementById('note-title').value   = note.title   ?? '';
     document.getElementById('note-content').value = note.content ?? '';

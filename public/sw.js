@@ -5,11 +5,12 @@
  * - Pre-caches profile pages so /profile works offline
  */
 
-const CACHE_VER   = 'jotify-v13';
-const ASSET_CACHE = 'jotify-assets-v13';
+const CACHE_VER   = 'jotify-v15';
+const ASSET_CACHE = 'jotify-assets-v15';
 
 // Pages to pre-cache at install so navigation works offline
 const PRECACHE_PAGES = [
+    '/notes',              // main notes list
     '/profile',
     '/profile/edit',
     '/offline-note.html',  // shell for dynamic note routes
@@ -139,16 +140,18 @@ async function networkFirst(req) {
         }
         return res;
     } catch {
-        // Offline — try cache first
+        // Offline — for note editor routes, always prefer the IDB-backed shell
+        // over potentially stale cached HTML (e.g. from initial creation with empty title)
+        if (req.mode === 'navigate' && /^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
+            const shell = await caches.match('/offline-note.html');
+            if (shell) return shell;
+        }
+
+        // Other pages — try cache
         const cached = await caches.match(req);
         if (cached) return cached;
 
         if (req.mode === 'navigate') {
-            // Dynamic note routes → serve offline editor shell
-            if (/^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
-                const shell = await caches.match('/offline-note.html');
-                if (shell) return shell;
-            }
             // All other navigation: branded offline page
             return offlineShell(url.pathname);
         }

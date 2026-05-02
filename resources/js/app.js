@@ -13,6 +13,7 @@ import {
     saveProfileToIDB, getProfileFromIDB,
     queueProfileUpdate, getProfileQueue, clearProfileQueue,
 } from './offline-db.js';
+import bcrypt from 'bcryptjs';
 
 // Fonts: Inter bundled via @fontsource in app.css, Material Icons served from public/fonts/
 
@@ -67,6 +68,8 @@ window.getProfileFromIDB = getProfileFromIDB;
 window.queueProfileUpdate = queueProfileUpdate;
 window.getProfileQueue    = getProfileQueue;
 window.clearProfileQueue  = clearProfileQueue;
+// Offline password verification (bcryptjs)
+window.bcryptCompareSync  = bcrypt.compareSync;
 
 
 /* ══════════════════════════════════════════════════════════════

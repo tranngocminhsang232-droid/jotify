@@ -658,6 +658,8 @@ var currentLabels = @json($note->labels->pluck('id'));
         .then(result => {
             if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-emerald-500">cloud_done</span> Saved ' + (result.updated_at || '');
             if (window._ajaxPrefetchCache) delete window._ajaxPrefetchCache['/notes'];
+            // Keep IDB fresh so offline always has latest title/content
+            if (window.updateNoteInIDB) window.updateNoteInIDB({ id: noteId, title: titleEl.value, content: contentEl.value });
         })
         .catch(() => {
             if (!navigator.onLine && window.queueUpdate) {
@@ -882,6 +884,8 @@ function noteEditor() {
                     delete window._ajaxPrefetchCache['/notes'];
                     delete window._ajaxPrefetchCache[window.location.origin + '/notes'];
                 }
+                // Keep IDB fresh so offline always has latest title/content
+                if (window.updateNoteInIDB) window.updateNoteInIDB({ id: noteId, title: this.title, content: this.content });
             } catch(e) {
                 // If offline, queue the update locally
                 if (!navigator.onLine && window.queueUpdate) {

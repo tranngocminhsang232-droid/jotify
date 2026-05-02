@@ -67,6 +67,7 @@ export async function saveNotesToIDB(notes) {
                 note_color:   note.note_color   ?? '#ffffff',
                 is_pinned:    note.is_pinned    ?? false,
                 has_password: note.has_password ?? false,
+                note_password:note.note_password ?? null, // bcrypt hash for offline pw verification
                 is_shared:    note.is_shared    ?? false,
                 labels:       note.labels       ?? [],
                 updated_at:   note.updated_at   ?? '',
@@ -107,9 +108,22 @@ export async function updateNoteInIDB(note) {
     try {
         const db = await getDB();
         const existing = await db.get(STORE_NOTES, note.id);
-        if (existing) {
-            await db.put(STORE_NOTES, { ...existing, ...note });
-        }
+        // Upsert: merge with existing or create with defaults
+        await db.put(STORE_NOTES, {
+            id:           note.id,
+            title:        '',
+            content:      '',
+            note_color:   'none',
+            is_pinned:    false,
+            has_password: false,
+            note_password:null,
+            is_shared:    false,
+            labels:       [],
+            updated_at:   '',
+            created_at_ts:0,
+            ...existing,   // override defaults with existing data
+            ...note,       // override with new data
+        });
     } catch (e) {
         console.warn('[IDB] updateNoteInIDB failed:', e);
     }

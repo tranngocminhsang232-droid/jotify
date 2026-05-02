@@ -822,14 +822,14 @@
                     if (navigator.serviceWorker.controller) {
                         navigator.serviceWorker.controller.postMessage({
                             type: 'CACHE_PAGES',
-                            pages: ['/profile', '/profile/edit', '/offline-note.html']
+                            pages: ['/notes', '/profile', '/profile/edit', '/offline-note.html']
                         });
                     }
                     // Also cache on controller change (first activation)
                     navigator.serviceWorker.addEventListener('controllerchange', () => {
                         navigator.serviceWorker.controller?.postMessage({
                             type: 'CACHE_PAGES',
-                            pages: ['/profile', '/profile/edit', '/offline-note.html']
+                            pages: ['/notes', '/profile', '/profile/edit', '/offline-note.html']
                         });
                     });
                     @endauth

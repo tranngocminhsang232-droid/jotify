@@ -1208,7 +1208,24 @@
         const password = document.getElementById('unlock-password')?.value;
         const action   = document.getElementById('unlock-action')?.value;
         try {
-            await apiCall(`/notes/${noteId}/unlock`, 'POST', { password });
+            if (navigator.onLine) {
+                // Online: verify via server API
+                await apiCall(`/notes/${noteId}/unlock`, 'POST', { password });
+            } else {
+                // Offline: verify locally using bcrypt hash from IDB
+                const note = window.getNotesFromIDB
+                    ? (await window.getNotesFromIDB()).find(n => String(n.id) === String(noteId))
+                    : null;
+                if (!note || !note.note_password) throw { error: 'Note not available offline.' };
+                const match = window.bcryptCompareSync
+                    ? window.bcryptCompareSync(password, note.note_password)
+                    : false;
+                if (!match) throw { error: 'Incorrect password.' };
+                // Mark as unlocked for this session (in-memory + sessionStorage for offline shell)
+                window._offlineUnlocked = window._offlineUnlocked || new Set();
+                window._offlineUnlocked.add(String(noteId));
+                try { sessionStorage.setItem('offline_unlocked_' + noteId, '1'); } catch(_) {}
+            }
             window.closePasswordModal();
             if (action === 'edit') {
                 const url = `/notes/${noteId}/edit`;
@@ -1424,6 +1441,7 @@
                 'note_color'    => $n->note_color ?? 'none',
                 'is_pinned'     => (bool) $n->is_pinned,
                 'has_password'  => (bool) $n->has_password,
+                'note_password' => $n->note_password ?? null, // bcrypt hash for offline verify
                 'is_shared'     => $n->shares->count() > 0,
                 'labels'        => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
                 'updated_at'    => $n->updated_at?->diffForHumans() ?? '',
@@ -1439,10 +1457,10 @@
 
         if (navigator.onLine) {
             // ── Online: sync everything to IDB ──────────────────────────────
-            if (window.saveNotesToIDB && notesData.length > 0) {
+            if (window.saveNotesToIDB) {
                 try { await window.saveNotesToIDB(notesData); } catch(e) {}
             }
-            if (window.saveLabelsToIDB && labelsData.length > 0) {
+            if (window.saveLabelsToIDB) {
                 try { await window.saveLabelsToIDB(labelsData); } catch(e) {}
             }
             if (window.savePreferencesToIDB) {

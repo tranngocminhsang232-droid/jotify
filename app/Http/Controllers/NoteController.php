@@ -66,7 +66,7 @@ class NoteController extends Controller
         return view('notes.index', compact('notes', 'labels', 'preferences'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $user = Auth::user();
         $preferences = $user->preferences()->firstOrCreate([], [
@@ -79,6 +79,11 @@ class NoteController extends Controller
             'content'    => '',
             'note_color' => $preferences->note_color,
         ]);
+
+        // Return JSON for offline sync queue (POST with Accept: application/json)
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['id' => $note->id]);
+        }
 
         return redirect('/notes/' . $note->id . '/edit');
     }

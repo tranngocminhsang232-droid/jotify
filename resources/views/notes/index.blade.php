@@ -643,49 +643,7 @@
     .note-swipeable.swiping { touch-action: none; }
 </style>
 
-{{-- Password unlock modal --}}
-<div id="password-modal"
-     class="modal-overlay modal-hidden"
-     style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;">
-    <div class="modal-box bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm mx-4 p-6">
-        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
-            <span class="material-icons-outlined text-amber-500">lock</span>
-            Note is Password Protected
-        </h3>
-        <form id="unlock-form" onsubmit="unlockNote(event)" data-no-transition>
-            <input type="hidden" id="unlock-note-id">
-            <input type="hidden" id="unlock-action">
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Enter Password</label>
-                <input type="password" id="unlock-password" class="form-input w-full" placeholder="Note password" required>
-                <p id="unlock-error" class="text-red-500 text-xs mt-1 hidden"></p>
-            </div>
-            <div class="flex gap-3 justify-end">
-                <button type="button" onclick="closePasswordModal()" class="btn-secondary">Cancel</button>
-                <button type="submit" class="btn-primary">Unlock</button>
-            </div>
-        </form>
-    </div>
-</div>
 
-
-{{-- Delete confirm modal --}}
-{{-- Modal được teleport vào <main> lúc mở để overlay đúng vùng note display --}}
-<div id="delete-modal"
-     class="modal-overlay modal-hidden"
-     style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;">
-    <div class="modal-box bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm mx-4 p-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-            <span class="material-icons-outlined text-red-500">delete</span>
-            Delete Note
-        </h3>
-        <p class="text-muted text-sm mb-6">Are you sure you want to delete this note? This action cannot be undone.</p>
-        <div class="flex gap-3 justify-end">
-            <button onclick="closeDeleteModal()" class="btn-secondary">Cancel</button>
-            <button id="confirm-delete-btn" class="btn-danger">Delete</button>
-        </div>
-    </div>
-</div>
 
 @push('scripts')
 <script>

@@ -374,17 +374,17 @@
         }
     }
 
-    /* List card */
+    /* List card — column layout so full-width image can sit below text row */
     .note-card-list {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         padding: 0.875rem 1.125rem;
         min-height: 68px;
         background: var(--color-card);
         border-radius: 0.875rem;
         border: 1px solid var(--color-border);
         transition: border-color 0.2s ease, background 0.2s ease;
-        gap: 0.875rem;
+        gap: 0.5rem;
     }
     .note-card-list:focus { outline: none; }
     .note-card-list:focus-visible {
@@ -558,10 +558,11 @@
         height: 90px;
         border-radius: 0.5rem;
         overflow: hidden;
-        margin-bottom: 0.4rem;
+        margin-top: 0.4rem;
         flex-shrink: 0;
     }
-    .note-thumb {
+    /* Full-width grid preview — distinct from .note-list-thumb (24×24 icon) */
+    .note-preview-img {
         width: 100%;
         height: 100%;
         object-fit: cover;
@@ -569,7 +570,7 @@
         transition: transform 0.25s ease;
     }
     @media (hover: hover) {
-        .note-card-wrapper:hover .note-thumb {
+        .note-card-wrapper:hover .note-preview-img {
             transform: scale(1.05);
         }
     }
@@ -585,7 +586,7 @@
         border-radius: 9999px;
         backdrop-filter: blur(2px);
     }
-    /* List view thumbnails — nhỏ, nằm cạnh label */
+    /* List view thumbnails — small 24×24 icon beside labels */
     .note-list-thumbs {
         display: flex;
         gap: 2px;
@@ -600,8 +601,7 @@
         display: block;
         flex-shrink: 0;
     }
-    /* Ẩn grid-thumbnail khi card ở list mode, ẩn list-thumbnail khi card ở grid mode */
-    .note-card-list .note-thumb-wrap  { display: none !important; }
+    /* note-thumb-wrap shown in BOTH grid and list views */
     .note-card-grid .note-list-thumbs { display: none !important; }
 
     /* ─── Swipe-to-action (mobile) ───────────────────────────────────── */
@@ -906,18 +906,11 @@
                 <span class="swipe-label">Delete</span>
             </div>`;
 
-        // Thumbnail ảnh đính kèm
+        // Full-width preview image — used in BOTH grid and list views
         const thumbGrid = note.first_image_url
             ? `<div class="note-thumb-wrap">
-                <img src="${note.first_image_url}" alt="Attachment" class="note-thumb" loading="lazy">
+                <img src="${note.first_image_url}" alt="Attachment" class="note-preview-img" loading="lazy">
                </div>`
-            : '';
-        const listImgs = (note.list_images || (note.first_image_url ? [note.first_image_url] : []))
-            .slice(0, 2)
-            .map(url => `<img src="${url}" alt="Attachment" class="note-list-thumb" loading="lazy">`)
-            .join('');
-        const thumbList = listImgs
-            ? `<div class="note-list-thumbs flex-shrink-0">${listImgs}</div>`
             : '';
 
         if (isGrid) {
@@ -937,8 +930,8 @@
                         ${pinBadge}
                         ${labelsGridHtml ? `<div class="note-grid-labels flex flex-wrap gap-1 mt-1">${labelsGridHtml}</div>` : ''}
                     </div>
-                    ${thumbGrid}
                     <p class="note-preview">${esc(note.content)}</p>
+                    ${thumbGrid}
                     <div class="note-footer"><span class="note-time">${note.updated_at}</span></div>
                 </div>
             </div>`;
@@ -965,11 +958,11 @@
                                 <div class="flex flex-wrap gap-1 flex-1 min-w-0">
                                     ${labelsList}
                                 </div>
-                                ${listImgs ? `<div class="note-list-thumbs flex-shrink-0">${listImgs}</div>` : ''}
                                 <span class="text-xs text-muted whitespace-nowrap note-list-time flex-shrink-0" style="opacity:0.7;">${note.updated_at}</span>
                             </div>
                         </div>
                     </div>
+                    ${thumbGrid}
                 </div>
             </div>`;
 

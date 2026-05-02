@@ -93,7 +93,7 @@
             <div class="note-thumb-wrap">
                 <img src="{{ asset('storage/' . $note->images->first()->image_path) }}"
                      alt="Attachment"
-                     class="note-thumb"
+                     class="note-preview-img"
                      loading="lazy">
                 @if($note->images->count() > 1)
                 <span class="note-thumb-count">+{{ $note->images->count() - 1 }}</span>
@@ -137,7 +137,7 @@
                     @else
                     <p class="text-xs text-muted truncate">{{ \Str::limit(strip_tags($note->content), 80) }}</p>
                     @endif
-                    {{-- Bottom row: labels + thumbnail nhỏ + timestamp --}}
+                    {{-- Bottom row: labels + timestamp --}}
                     <div class="flex items-center gap-2 mt-0.5">
                         <div class="flex flex-wrap gap-1 flex-1 min-w-0">
                             @foreach($note->labels->take(2) as $label)
@@ -147,20 +147,26 @@
                             <span style="font-size:9px" class="text-muted self-center">+{{ $note->labels->count() - 2 }}</span>
                             @endif
                         </div>
-                        @if($note->images->count() > 0)
-                        <div class="note-list-thumbs flex-shrink-0">
-                            @foreach($note->images->take(2) as $img)
-                            <img src="{{ asset('storage/' . $img->image_path) }}" alt="" class="note-list-thumb" loading="lazy">
-                            @endforeach
-                        </div>
-                        @endif
                         <span class="text-xs text-muted whitespace-nowrap note-list-time flex-shrink-0" style="opacity:0.7;">
                             {{ $note->updated_at->diffForHumans() }}
                         </span>
                     </div>
                 </div>
-
             </div>
+
+            {{-- Full-width image preview below content (same as grid view) --}}
+            @if($note->images->count() > 0)
+            <div class="note-thumb-wrap">
+                <img src="{{ asset('storage/' . $note->images->first()->image_path) }}"
+                     alt="Attachment"
+                     class="note-preview-img"
+                     loading="lazy">
+                @if($note->images->count() > 1)
+                <span class="note-thumb-count">+{{ $note->images->count() - 1 }}</span>
+                @endif
+            </div>
+            @endif
+
         @endif
 
     </div>{{-- end note-card-inner --}}

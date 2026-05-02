@@ -551,58 +551,63 @@
         line-height: 1;
     }
 
-    /* ─── Thumbnail ảnh đính kèm ────────────────────────────────────────── */
+    /* ─── Image preview (unified for grid + list) ─────────────────────── */
     .note-thumb-wrap {
         position: relative;
         width: 100%;
-        height: 90px;
-        border-radius: 0.5rem;
+        aspect-ratio: 16 / 7;
+        border-radius: 0.625rem;
         overflow: hidden;
-        margin-top: 0.4rem;
+        margin-top: 0.5rem;
         flex-shrink: 0;
+        background: rgba(0,0,0,0.04);
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
     }
-    /* Full-width grid preview — distinct from .note-list-thumb (24×24 icon) */
     .note-preview-img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
-        transition: transform 0.25s ease;
+        transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94),
+                    filter 0.35s ease;
+    }
+    /* Subtle gradient overlay for depth */
+    .note-thumb-wrap::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.08) 100%);
+        pointer-events: none;
+        border-radius: inherit;
+        transition: opacity 0.3s ease;
     }
     @media (hover: hover) {
         .note-card-wrapper:hover .note-preview-img {
-            transform: scale(1.05);
+            transform: scale(1.04);
+        }
+        .note-card-wrapper:hover .note-thumb-wrap::after {
+            opacity: 0.6;
+        }
+        .note-card-wrapper:hover .note-thumb-wrap {
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06),
+                        0 4px 16px rgba(0,0,0,0.10);
         }
     }
     .note-thumb-count {
         position: absolute;
-        bottom: 4px;
-        right: 5px;
-        background: rgba(0,0,0,0.55);
+        bottom: 6px;
+        right: 6px;
+        background: rgba(0,0,0,0.6);
         color: #fff;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 700;
-        padding: 1px 5px;
+        padding: 2px 7px;
         border-radius: 9999px;
-        backdrop-filter: blur(2px);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        letter-spacing: 0.02em;
+        z-index: 1;
     }
-    /* List view thumbnails — small 24×24 icon beside labels */
-    .note-list-thumbs {
-        display: flex;
-        gap: 2px;
-        align-self: center;
-        flex-shrink: 0;
-    }
-    .note-list-thumb {
-        width: 24px;
-        height: 24px;
-        border-radius: 3px;
-        object-fit: cover;
-        display: block;
-        flex-shrink: 0;
-    }
-    /* note-thumb-wrap shown in BOTH grid and list views */
-    .note-card-grid .note-list-thumbs { display: none !important; }
 
     /* ─── Swipe-to-action (mobile) ───────────────────────────────────── */
     .swipe-row { /* alias for note-card-wrapper */ }

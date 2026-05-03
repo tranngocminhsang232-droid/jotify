@@ -1,0 +1,206 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head><meta charset="utf-8"><meta name="ProgId" content="Word.Document">
+<style>
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;margin:2cm 2.5cm;color:#1a1a1a}
+h1{font-size:18pt;color:#15803d;border-bottom:3px solid #22c55e;padding-bottom:8px}
+h2{font-size:14pt;color:#166534;margin-top:24px;border-left:4px solid #22c55e;padding-left:10px}
+h3{font-size:12pt;color:#15803d;margin-top:18px}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:9.5pt}
+th{background:#166534;color:#fff;padding:6px 8px;text-align:left;font-size:9pt}
+td{border:1px solid #d1d5db;padding:5px 7px;vertical-align:top}
+tr:nth-child(even){background:#f0fdf4}
+.pass{color:#16a34a;font-weight:700}
+.pending{color:#d97706;font-weight:700}
+code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:8.5pt;font-family:Consolas,monospace}
+.tech-table td:nth-child(1){width:25%;font-weight:600}
+.tech-table td:nth-child(3){font-size:8.5pt;color:#4b5563}
+.section-info{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0;font-size:10pt}
+</style></head><body>
+
+<h1>📋 JOTIFY — Báo cáo Kiểm tra 28 Tiêu chí & Công nghệ</h1>
+<p><b>Đồ án:</b> Quản lý ghi chú trực tuyến JOTIFY (503073) &nbsp;|&nbsp; <b>Ngày audit:</b> 2026-05-02</p>
+
+<h2>I. BẢNG CÔNG NGHỆ SỬ DỤNG</h2>
+<table class="tech-table">
+<tr><th>Công nghệ</th><th>Phiên bản</th><th>Source code reference</th></tr>
+<tr><td>PHP</td><td>^8.3</td><td><code>composer.json</code> L9</td></tr>
+<tr><td>Laravel Framework</td><td>^13.0</td><td><code>composer.json</code> L10</td></tr>
+<tr><td>Tailwind CSS</td><td>^4.0.0</td><td><code>package.json</code> L16, <code>resources/css/app.css</code> L10: <code>@import 'tailwindcss'</code></td></tr>
+<tr><td>Alpine.js</td><td>^3.15.11</td><td><code>package.json</code> L22, <code>resources/js/app.js</code> L2-3,20-22</td></tr>
+<tr><td>@alpinejs/persist</td><td>^3.15.11</td><td><code>package.json</code> L20, <code>app.js</code> L3,20</td></tr>
+<tr><td>Vite</td><td>^8.0.0</td><td><code>package.json</code> L17, <code>vite.config.js</code></td></tr>
+<tr><td>laravel-vite-plugin</td><td>^3.0.0</td><td><code>package.json</code> L14</td></tr>
+<tr><td>Pusher (Server)</td><td>7.2</td><td><code>composer.json</code> L13</td></tr>
+<tr><td>pusher-js (Client)</td><td>^8.5.0</td><td><code>package.json</code> L15, <code>app.js</code> L5,27</td></tr>
+<tr><td>Laravel Echo</td><td>^2.3.4</td><td><code>package.json</code> L13, <code>app.js</code> L4,32-38</td></tr>
+<tr><td>PHPMailer</td><td>^7.0</td><td><code>composer.json</code> L12, <code>app/Services/MailService.php</code></td></tr>
+<tr><td>MySQL</td><td>8.x</td><td><code>.env</code> L19-24, <code>config/database.php</code> L47-65</td></tr>
+<tr><td>Axios</td><td>>=1.11.0</td><td><code>package.json</code> L11</td></tr>
+<tr><td>idb (IndexedDB)</td><td>^8.0.3</td><td><code>package.json</code> L24, <code>resources/js/offline-db.js</code> L5</td></tr>
+<tr><td>bcryptjs</td><td>^3.0.3</td><td><code>package.json</code> L23, <code>app.js</code> L16,72</td></tr>
+<tr><td>@fontsource/inter</td><td>^5.2.8</td><td><code>package.json</code> L21, <code>app.css</code> L2-7</td></tr>
+<tr><td>material-icons</td><td>^1.13.14</td><td><code>package.json</code> L25</td></tr>
+<tr><td>Concurrently</td><td>^9.0.1</td><td><code>package.json</code> L12</td></tr>
+<tr><td>Service Worker</td><td>v15</td><td><code>public/sw.js</code> L2,8</td></tr>
+<tr><td>Cache API</td><td>—</td><td><code>public/sw.js</code> L8-9: <code>CACHE_VER</code>, <code>ASSET_CACHE</code></td></tr>
+<tr><td>@tailwindcss/vite</td><td>^4.0.0</td><td><code>package.json</code> L10, <code>vite.config.js</code> L3,11</td></tr>
+</table>
+
+<h2>II. KIỂM TRA 28 TIÊU CHÍ</h2>
+
+<h3>Nhóm A: Quản lý Tài khoản (8/8 = 2.0đ)</h3>
+<table>
+<tr><th>#</th><th>Tiêu chí</th><th>Công nghệ & Source reference</th><th>KQ</th></tr>
+<tr><td>1</td><td>User Registration</td>
+<td><code>RegisterController.php</code> L34: <code>Hash::make()</code><br><code>RegisterController.php</code> L49: <code>Auth::login($user)</code> (auto-login)<br><code>MailService.php</code> L55-81: gửi activation email (PHPMailer)<br><code>register.blade.php</code> L184: <code>@csrf</code>, L149: <code>x-data</code> (Alpine.js)</td>
+<td class="pass">✅</td></tr>
+<tr><td>2</td><td>Account Activation</td>
+<td><code>ActivationController.php</code>: xử lý link token<br><code>layouts/app.blade.php</code> L434: banner amber khi <code>!is_activated</code>, nút Resend<br><code>MailService.php</code> L55: <code>sendActivationEmail()</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>3</td><td>User Login/Logout</td>
+<td><code>LoginController.php</code>: <code>Auth::attempt()</code>, <code>Auth::logout()</code><br><code>routes/web.php</code> L21-22,40: routes login/logout, middleware <code>auth</code>/<code>guest</code><br><code>login.blade.php</code> L217,268,271: <code>x-data</code> (Alpine), <code>@csrf</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>4</td><td>Password Reset</td>
+<td><code>ForgotPasswordController.php</code> L31: <code>Hash::make($token)</code>, OTP 6 số<br><code>ForgotPasswordController.php</code> L117: <code>Hash::make()</code> cho password mới<br><code>MailService.php</code> L92-118: <code>sendPasswordResetEmail()</code><br><code>forgot-password.blade.php</code>, <code>otp-verify.blade.php</code>, <code>reset-password.blade.php</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>5</td><td>View Profile & Avatar</td>
+<td><code>ProfileController.php</code>: <code>show()</code><br><code>profile/show.blade.php</code>: avatar, display_name, email, member since<br><code>public/sw.js</code> L5: pre-cache profile pages for offline</td>
+<td class="pass">✅</td></tr>
+<tr><td>6</td><td>Edit Profile & Avatar</td>
+<td><code>ProfileController.php</code>: <code>update()</code>, file upload avatar<br><code>profile/edit.blade.php</code> L18,94: <code>@csrf</code>, click-to-upload preview<br><code>offline-db.js</code> L15: <code>STORE_PROFILE</code> offline cache</td>
+<td class="pass">✅</td></tr>
+<tr><td>7</td><td>Change Password</td>
+<td><code>ProfileController.php</code> L81: <code>Hash::make($request->password)</code><br><code>change-password.blade.php</code> L12: <code>@csrf @method('PUT')</code><br><code>routes/web.php</code> L50-51</td>
+<td class="pass">✅</td></tr>
+<tr><td>8</td><td>User Preferences</td>
+<td><code>PreferenceController.php</code>: font_size, note_color, theme, view_mode<br><code>preferences/edit.blade.php</code> L199: <code>@csrf</code>, radio theme, color swatches<br><code>routes/web.php</code> L54-57: 4 preference routes<br><code>offline-db.js</code> L14: <code>STORE_PREFS</code> IndexedDB cache</td>
+<td class="pass">✅</td></tr>
+</table>
+
+<h3>Nhóm B: Quản lý Ghi chú Cơ bản (12/12 = 4.0đ)</h3>
+<table>
+<tr><th>#</th><th>Tiêu chí</th><th>Công nghệ & Source reference</th><th>KQ</th></tr>
+<tr><td>9</td><td>Display notes — List view</td>
+<td><code>index.blade.php</code>: <code>switchView('list')</code>, lưu preference qua AJAX<br><code>app.css</code> L671-698: <code>.note-card-list</code> CSS (flex, hover spring animation)<br><code>routes/web.php</code> L56: <code>POST /preferences/view-mode</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>10</td><td>Display notes — Grid view</td>
+<td><code>index.blade.php</code>: <code>grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3</code> (Tailwind)<br><code>app.css</code> L645-669: <code>.note-card-grid</code> CSS (hover scale+shadow)</td>
+<td class="pass">✅</td></tr>
+<tr><td>11</td><td>Create notes</td>
+<td><code>NoteController.php</code>: <code>create()</code> → POST <code>/notes</code><br><code>index.blade.php</code> L206: <code>@csrf</code> form, nút "New Note"<br><code>offline-db.js</code> L11: <code>STORE_CREATES</code> offline queue</td>
+<td class="pass">✅</td></tr>
+<tr><td>12</td><td>Update notes</td>
+<td><code>editor.blade.php</code> L204: <code>x-data="noteEditor()"</code> (Alpine.js)<br><code>NoteController.php</code>: <code>autoSave()</code> — PUT <code>/notes/{id}/auto-save</code><br><code>offline-db.js</code> L12: <code>STORE_UPDATES</code> offline queue</td>
+<td class="pass">✅</td></tr>
+<tr><td>13</td><td>Delete notes</td>
+<td><code>index.blade.php</code>: modal <code>#delete-modal</code>, confirm dialog<br><code>NoteController.php</code>: <code>destroy()</code> — DELETE <code>/notes/{id}</code><br><code>offline-db.js</code>: <code>deleteNoteFromIDB()</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>14</td><td>Auto-save notes</td>
+<td><code>editor.blade.php</code>: debounce 1000ms title, 1500ms content<br>Status UI: "Saving..." spinner → "Saved" cloud_done → "Failed" red<br><code>NoteController.php</code> L124: <code>broadcast(new NoteContentUpdated(...))</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>15</td><td>Attach images</td>
+<td><code>NoteController.php</code>: <code>uploadImage()</code> — POST <code>/notes/{id}/upload-image</code><br><code>editor.blade.php</code>: <code>input[type=file][multiple]</code>, grid preview<br><code>NoteImage.php</code> model, migration <code>0006</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>16</td><td>Pin notes to top</td>
+<td><code>NoteController.php</code>: <code>togglePin()</code> — POST <code>/notes/{id}/toggle-pin</code><br><code>index.blade.php</code>: <code>window.togglePin()</code> AJAX, DOM re-sort by <code>pinned_at</code><br>Icon: <code>push_pin</code> amber (#f59e0b)</td>
+<td class="pass">✅</td></tr>
+<tr><td>17</td><td>Search notes</td>
+<td><code>index.blade.php</code>: search input, debounce 300ms, spinner<br><code>NoteController.php</code>: <code>index()</code> — GET <code>/notes?search=...</code> JSON response<br>Vanilla JS: <code>window.doSearch()</code>, <code>window.renderNotes()</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>18</td><td>Label management</td>
+<td><code>LabelController.php</code>: full CRUD — <code>routes/web.php</code> L78-82 (5 routes)<br><code>labels/manage.blade.php</code> L10: <code>x-data="labelPageManager()"</code> (Alpine)<br><code>labels/modal.blade.php</code> L3: <code>x-data="labelManager()"</code></td>
+<td class="pass">✅</td></tr>
+<tr><td>19</td><td>Attach labels to notes</td>
+<td><code>NoteController.php</code>: <code>updateLabels()</code> — PUT <code>/notes/{id}/labels</code><br><code>editor.blade.php</code>: dropdown search, <code>toggleLabel()</code> AJAX<br>Migration <code>0005</code>: <code>label_note</code> pivot table</td>
+<td class="pass">✅</td></tr>
+<tr><td>20</td><td>Filter notes by labels</td>
+<td><code>index.blade.php</code>: label chips, click → AJAX <code>?labels={id}</code><br><code>NoteController.php</code>: <code>whereHas('labels', ...)</code> Eloquent query<br>Kết hợp live search + label filter</td>
+<td class="pass">✅</td></tr>
+</table>
+
+<h3>Nhóm C: Quản lý Ghi chú Nâng cao (4/4 = 2.0đ)</h3>
+<table>
+<tr><th>#</th><th>Tiêu chí</th><th>Công nghệ & Source reference</th><th>KQ</th></tr>
+<tr><td>21</td><td>Enable/disable password</td>
+<td><code>NoteController.php</code> L271: <code>Hash::make()</code> set password<br><code>NoteController.php</code>: <code>removePassword()</code> — verify current password trước<br><code>routes/web.php</code> L72-75: 4 password routes</td>
+<td class="pass">✅</td></tr>
+<tr><td>22</td><td>Password protection</td>
+<td><code>NoteController.php</code> L316: <code>Hash::make()</code> change password<br><code>NoteController.php</code>: <code>unlockNote()</code> — bcrypt verify, session <code>note_unlocked_{id}</code><br><code>index.blade.php</code>: modal <code>#password-modal</code>, <code>window.unlockNote()</code><br><code>bcryptjs</code> (<code>app.js</code> L72): offline password verify client-side</td>
+<td class="pass">✅</td></tr>
+<tr><td>23</td><td>Share and receive notes</td>
+<td><code>ShareController.php</code>: <code>share()</code>, <code>getShares()</code>, <code>updatePermission()</code>, <code>revoke()</code><br><code>MailService.php</code> L132-167: <code>sendNoteSharedEmail()</code> (PHPMailer)<br><code>NoteShare.php</code> model, migration <code>0007</code><br><code>routes/web.php</code> L85-95: 8 share routes</td>
+<td class="pass">✅</td></tr>
+<tr><td>24</td><td>Collaboration & realtime</td>
+<td><b>Pusher WebSocket + Laravel Echo:</b><br>
+• <code>app/Events/NoteContentUpdated.php</code> L12: <code>ShouldBroadcast</code><br>
+• <code>routes/channels.php</code> L14: <code>Broadcast::channel('note.{noteId}', ...)</code><br>
+• <code>NoteController.php</code> L124: <code>broadcast(new NoteContentUpdated(...))</code><br>
+• <code>ShareController.php</code> L281: <code>broadcast(new NoteContentUpdated(...))</code><br>
+• <code>shared-editor.blade.php</code> L353: <code>Echo.private('note.'+id).listen()</code><br>
+• <code>resources/js/app.js</code> L27-45: Echo + Pusher init<br>
+• <code>.env</code> L37-47: PUSHER_APP_ID, KEY, SECRET, CLUSTER<br>
+• <code>composer.json</code> L13: <code>pusher/pusher-php-server: 7.2</code><br>
+• <code>package.json</code> L13,15: <code>laravel-echo: ^2.3.4</code>, <code>pusher-js: ^8.5.0</code></td>
+<td class="pass">✅</td></tr>
+</table>
+
+<h3>Nhóm D: Yêu cầu Khác (3/4 = 1.5đ)</h3>
+<table>
+<tr><th>#</th><th>Tiêu chí</th><th>Công nghệ & Source reference</th><th>KQ</th></tr>
+<tr><td>25</td><td>UI and UX</td>
+<td><code>resources/css/app.css</code> (836 dòng): Design System đầy đủ<br>
+• L17-19: <code>@theme { --font-sans: 'Inter' }</code><br>
+• L26-65: CSS Variables light/dark theme<br>
+• L68-74: Smooth theme transition<br>
+• L260-284: Ripple effect animation<br>
+• L286-405: Button system (primary/secondary/danger) spring physics<br>
+• L520-554: Icon color system theme-aware<br>
+• L740-793: Keyframe animations (slide-up, scale-in, shimmer, fade-in, spin)<br>
+<code>layouts/app.blade.php</code>: AJAX navigation engine, slide animation<br>
+<code>index.blade.php</code>: swipe gestures mobile, toast notifications, view toggle pill</td>
+<td class="pass">✅</td></tr>
+<tr><td>26</td><td>Responsive</td>
+<td>Tailwind utility classes: <code>sm:</code>, <code>lg:</code>, <code>hidden sm:inline</code><br>
+<code>app.css</code> L659,687: <code>@media (hover:hover)</code> — touch vs mouse<br>
+<code>app.css</code> L705-715: <code>@media (min-width:640px)</code> — action buttons<br>
+<code>index.blade.php</code>: grid <code>grid-cols-2 sm:grid-cols-2 lg:grid-cols-3</code><br>
+Login/Register: <code>@media (max-width:680px)</code> — split-screen collapse</td>
+<td class="pass">✅</td></tr>
+<tr><td>27</td><td>Offline Capabilities</td>
+<td><b>Service Worker v15:</b> <code>public/sw.js</code> L2,8 (166 dòng)<br>
+• Cache-First: static assets (<code>ASSET_CACHE</code> L9)<br>
+• Network-First: pages + API<br>
+• Pre-cache profile pages (L5)<br>
+<b>IndexedDB (idb 8.0):</b> <code>resources/js/offline-db.js</code> (351 dòng)<br>
+• L5: <code>import { openDB } from 'idb'</code><br>
+• L10-15: 6 object stores (notes, pending_creates, pending_updates, labels, preferences, profile)<br>
+<b>bcryptjs:</b> <code>app.js</code> L16: <code>import bcrypt from 'bcryptjs'</code><br>
+• L72: <code>window.bcryptCompareSync = bcrypt.compareSync</code> (offline password verify)<br>
+<b>Exposed APIs:</b> <code>app.js</code> L50-70: 15+ IDB functions globally<br>
+<code>public/offline-note.html</code>: offline note editor fallback<br>
+<code>public/manifest.json</code>: PWA manifest</td>
+<td class="pass">✅</td></tr>
+<tr><td>28</td><td>Online Deployment</td>
+<td><code>nixpacks.toml</code> (23 dòng): PHP 8.3 + Node 22, build commands<br>
+<code>railway-deploy.sh</code> (19 dòng): migrate, storage:link<br>
+<code>deploy-infinityfree/</code>: fallback hosting setup<br>
+Chưa có URL production.</td>
+<td class="pending">⚠️</td></tr>
+</table>
+
+<h2>III. TỔNG KẾT</h2>
+<table>
+<tr><th>Nhóm</th><th>Điểm tối đa</th><th>Kết quả</th><th>Ghi chú</th></tr>
+<tr><td>A – Account Management</td><td>2.0</td><td class="pass">2.0 ✅ (8/8)</td><td>Hoàn chỉnh</td></tr>
+<tr><td>B – Simple Note Management</td><td>4.0</td><td class="pass">4.0 ✅ (12/12)</td><td>Hoàn chỉnh</td></tr>
+<tr><td>C – Advanced Note Management</td><td>2.0</td><td class="pass">2.0 ✅ (4/4)</td><td>Pusher WebSocket + IndexedDB</td></tr>
+<tr><td>D – Other Requirements</td><td>2.0</td><td class="pending">1.5 ⚠️ (3/4)</td><td>Deploy in progress</td></tr>
+<tr><td><b>TỔNG</b></td><td><b>10.0</b></td><td><b>~9.5</b></td><td>Chỉ còn Deploy</td></tr>
+</table>
+
+<div class="section-info">
+<b>📝 Ghi chú:</b> File này có thể mở trực tiếp bằng Microsoft Word (File → Open → chọn file .html).
+Tất cả source references đã được verify trực tiếp từ source code ngày 2026-05-02.
+</div>
+
+</body></html>

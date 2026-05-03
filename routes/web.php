@@ -136,7 +136,11 @@ if (config('app.debug')) {
 
     // ─── MAIL DIAGNOSTIC (debug only) ──────────────────────────────────────
     Route::get('/debug/test-mail', function () {
+        $resendKey = config('services.resend.key');
+
         $config = [
+            'ACTIVE_TRANSPORT'  => $resendKey ? '🚀 Resend HTTP API' : '📧 PHPMailer SMTP',
+            'RESEND_API_KEY'    => $resendKey ? '✅ SET (' . substr($resendKey, 0, 8) . '...)' : '❌ NOT SET',
             'MAIL_MAILER'       => config('mail.default'),
             'MAIL_HOST'         => config('mail.mailers.smtp.host'),
             'MAIL_PORT'         => config('mail.mailers.smtp.port'),
@@ -166,15 +170,17 @@ if (config('app.debug')) {
                 );
 
                 $result['test_email'] = [
-                    'status' => '✅ SUCCESS',
-                    'sent_to' => $sendTo,
-                    'message' => 'Email sent successfully! Check the inbox.',
+                    'status'    => '✅ SUCCESS',
+                    'transport' => $resendKey ? 'Resend' : 'SMTP',
+                    'sent_to'   => $sendTo,
+                    'message'   => 'Email sent successfully! Check the inbox.',
                 ];
             } catch (\Exception $e) {
                 $result['test_email'] = [
-                    'status' => '❌ FAILED',
-                    'sent_to' => $sendTo,
-                    'error' => $e->getMessage(),
+                    'status'    => '❌ FAILED',
+                    'transport' => $resendKey ? 'Resend' : 'SMTP',
+                    'sent_to'   => $sendTo,
+                    'error'     => $e->getMessage(),
                 ];
             }
         } else {

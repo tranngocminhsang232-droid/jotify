@@ -5,15 +5,95 @@ namespace App\Services;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class MailService
 {
+    // ─── TRANSPORT SELECTION ───────────────────────────────────────────────
+    // If RESEND_API_KEY is set → use Resend HTTP API (works on Railway/cloud)
+    // Otherwise → use PHPMailer SMTP (works on localhost/XAMPP)
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Send an email using the best available transport.
+     *
+     * @throws \RuntimeException on any failure
+     */
+    private static function sendEmail(
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        $resendKey = config('services.resend.key');
+
+        if ($resendKey) {
+            self::sendViaResend($resendKey, $to, $toName, $subject, $htmlBody, $textBody);
+        } else {
+            self::sendViaSmtp($to, $toName, $subject, $htmlBody, $textBody);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  RESEND HTTP API TRANSPORT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Send email via Resend REST API (HTTPS — no SMTP ports needed).
+     *
+     * @throws \RuntimeException on API error
+     */
+    private static function sendViaResend(
+        string $apiKey,
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        $fromAddress = config('mail.from.address', 'onboarding@resend.dev');
+        $fromName    = config('mail.from.name', config('app.name', 'JOTIFY'));
+
+        $payload = [
+            'from'    => "{$fromName} <{$fromAddress}>",
+            'to'      => $toName ? ["{$toName} <{$to}>"] : [$to],
+            'subject' => $subject,
+            'html'    => $htmlBody,
+            'text'    => $textBody,
+        ];
+
+        Log::debug('Resend API request', [
+            'to'      => $to,
+            'from'    => $payload['from'],
+            'subject' => $subject,
+        ]);
+
+        $response = Http::withToken($apiKey)
+            ->timeout(15)
+            ->post('https://api.resend.com/emails', $payload);
+
+        if ($response->successful()) {
+            $id = $response->json('id') ?? 'unknown';
+            Log::info("Email sent via Resend to {$to}, id: {$id}");
+            return;
+        }
+
+        $error = $response->json('message') ?? $response->body();
+        $status = $response->status();
+        Log::error("Resend API error [{$status}] for {$to}: {$error}");
+        throw new \RuntimeException("Resend API error ({$status}): {$error}");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PHPMAILER SMTP TRANSPORT (local development)
+    // ═══════════════════════════════════════════════════════════════════════
+
     /**
      * Validate that all required SMTP configuration values are present.
-     * Throws RuntimeException with a clear message if anything is missing.
      */
-    private static function validateConfig(): void
+    private static function validateSmtpConfig(): void
     {
         $required = [
             'MAIL_HOST'         => config('mail.mailers.smtp.host'),
@@ -24,7 +104,7 @@ class MailService
 
         $missing = [];
         foreach ($required as $key => $value) {
-            if (empty($value) || $value === '127.0.0.1' && $key === 'MAIL_HOST') {
+            if (empty($value) || ($value === '127.0.0.1' && $key === 'MAIL_HOST')) {
                 $missing[] = $key;
             }
         }
@@ -33,37 +113,24 @@ class MailService
             $list = implode(', ', $missing);
             throw new \RuntimeException(
                 "Mail configuration incomplete — missing or default values for: {$list}. "
-                . "Set these environment variables in Railway Dashboard."
+                . "Set these environment variables or use RESEND_API_KEY for HTTP-based sending."
             );
         }
     }
 
     /**
-     * Log the current SMTP configuration (without password) for diagnostics.
-     */
-    private static function logSmtpConfig(): void
-    {
-        Log::debug('MailService SMTP config', [
-            'host'         => config('mail.mailers.smtp.host'),
-            'port'         => config('mail.mailers.smtp.port'),
-            'scheme'       => config('mail.mailers.smtp.scheme'),
-            'username'     => config('mail.mailers.smtp.username'),
-            'from_address' => config('mail.from.address'),
-            'from_name'    => config('mail.from.name'),
-            'app_url'      => config('app.url'),
-        ]);
-    }
-
-    /**
-     * Tạo và cấu hình PHPMailer instance từ .env
+     * Send email via PHPMailer SMTP.
      *
-     * @throws \RuntimeException  if config is incomplete
-     * @throws PHPMailerException if PHPMailer setup fails
+     * @throws \RuntimeException on connection/send failure
      */
-    private static function createMailer(): PHPMailer
-    {
-        // Validate config BEFORE creating instance
-        self::validateConfig();
+    private static function sendViaSmtp(
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        self::validateSmtpConfig();
 
         $mail = new PHPMailer(true);
 
@@ -91,8 +158,8 @@ class MailService
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         }
 
-        // Timeout – avoid hanging on broken SMTP connections
-        $mail->Timeout    = 15;
+        // Timeout
+        $mail->Timeout       = 15;
         $mail->SMTPKeepAlive = false;
 
         // Charset và encoding
@@ -105,8 +172,24 @@ class MailService
             config('mail.from.name', config('app.name'))
         );
 
-        return $mail;
+        // Recipient
+        $mail->addAddress($to, $toName);
+        $mail->Subject = $subject;
+        $mail->isHTML(true);
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $textBody;
+
+        try {
+            $mail->send();
+            Log::info("Email sent via SMTP to {$to}");
+        } catch (PHPMailerException $e) {
+            throw new \RuntimeException("SMTP Error: " . $e->getMessage(), 0, $e);
+        }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PUBLIC API — unchanged interface for all callers
+    // ═══════════════════════════════════════════════════════════════════════
 
     /**
      * Gửi email kích hoạt tài khoản
@@ -114,33 +197,30 @@ class MailService
      * @param  \App\Models\User  $user
      * @param  string  $activationUrl
      * @return bool  true on success
-     * @throws \RuntimeException  if mail config is missing or send fails
+     * @throws \RuntimeException on failure
      */
     public static function sendActivationEmail($user, string $activationUrl): bool
     {
         try {
-            self::logSmtpConfig();
+            $subject = 'Activate Your ' . config('app.name') . ' Account';
 
-            $mail = self::createMailer();
-            $mail->addAddress($user->email, $user->display_name ?? $user->name);
-            $mail->Subject = 'Activate Your ' . config('app.name') . ' Account';
-            $mail->isHTML(true);
-
-            // Render Blade template sang HTML
-            $mail->Body    = view('emails.activation', [
+            $html = view('emails.activation', [
                 'user'          => $user,
                 'activationUrl' => $activationUrl,
             ])->render();
 
-            $mail->AltBody = "Hi {$user->display_name},\n\nPlease activate your account by visiting:\n{$activationUrl}";
+            $text = "Hi {$user->display_name},\n\nPlease activate your account by visiting:\n{$activationUrl}";
 
-            $mail->send();
+            self::sendEmail(
+                $user->email,
+                $user->display_name ?? $user->name,
+                $subject,
+                $html,
+                $text
+            );
 
             Log::info("Activation email sent successfully to {$user->email}");
             return true;
-        } catch (PHPMailerException $e) {
-            Log::error("PHPMailer failed to send activation email to {$user->email}: " . $e->getMessage());
-            throw new \RuntimeException("Failed to send activation email: " . $e->getMessage(), 0, $e);
         } catch (\Exception $e) {
             Log::error("Failed to send activation email to {$user->email}: " . $e->getMessage());
             throw new \RuntimeException("Failed to send activation email: " . $e->getMessage(), 0, $e);
@@ -154,33 +234,24 @@ class MailService
      * @param  string  $resetUrl
      * @param  string  $otp
      * @return bool  true on success
-     * @throws \RuntimeException  if mail config is missing or send fails
+     * @throws \RuntimeException on failure
      */
     public static function sendPasswordResetEmail(string $toEmail, string $resetUrl, string $otp): bool
     {
         try {
-            self::logSmtpConfig();
+            $subject = 'Reset Your ' . config('app.name') . ' Password';
 
-            $mail = self::createMailer();
-            $mail->addAddress($toEmail);
-            $mail->Subject = 'Reset Your ' . config('app.name') . ' Password';
-            $mail->isHTML(true);
-
-            // Render Blade template sang HTML
-            $mail->Body    = view('emails.password-reset', [
+            $html = view('emails.password-reset', [
                 'resetUrl' => $resetUrl,
                 'otp'      => $otp,
             ])->render();
 
-            $mail->AltBody = "Reset your password by visiting:\n{$resetUrl}\n\nOr use OTP: {$otp}\n\nThis code expires in 60 minutes.";
+            $text = "Reset your password by visiting:\n{$resetUrl}\n\nOr use OTP: {$otp}\n\nThis code expires in 60 minutes.";
 
-            $mail->send();
+            self::sendEmail($toEmail, '', $subject, $html, $text);
 
             Log::info("Password reset email sent successfully to {$toEmail}");
             return true;
-        } catch (PHPMailerException $e) {
-            Log::error("PHPMailer failed to send password reset email to {$toEmail}: " . $e->getMessage());
-            throw new \RuntimeException("Failed to send password reset email: " . $e->getMessage(), 0, $e);
         } catch (\Exception $e) {
             Log::error("Failed to send password reset email to {$toEmail}: " . $e->getMessage());
             throw new \RuntimeException("Failed to send password reset email: " . $e->getMessage(), 0, $e);
@@ -197,7 +268,7 @@ class MailService
      * @param  mixed   $sharer      User object của người chia sẻ
      * @param  string  $permission  'read' hoặc 'edit'
      * @return bool  true on success
-     * @throws \RuntimeException  if mail config is missing or send fails
+     * @throws \RuntimeException on failure
      */
     public static function sendNoteSharedEmail(
         string $toEmail,
@@ -208,30 +279,24 @@ class MailService
         string $permission = 'read'
     ): bool {
         try {
-            self::logSmtpConfig();
+            $subject = config('app.name') . ': '
+                . ($sharer ? $sharer->display_name : 'Someone')
+                . ' shared a note with you';
 
-            $mail = self::createMailer();
-            $mail->addAddress($toEmail, $toName);
-            $mail->Subject = config('app.name') . ': ' . ($sharer ? $sharer->display_name : 'Someone') . ' shared a note with you';
-            $mail->isHTML(true);
-
-            $mail->Body = view('emails.note-shared', [
+            $html = view('emails.note-shared', [
                 'note'       => $note,
                 'shareUrl'   => $shareUrl,
                 'sharer'     => $sharer,
                 'permission' => $permission,
             ])->render();
 
-            $mail->AltBody = ($sharer ? $sharer->display_name : 'Someone')
+            $text = ($sharer ? $sharer->display_name : 'Someone')
                 . " shared the note \"{$note->title}\" with you.\nView it at: {$shareUrl}";
 
-            $mail->send();
+            self::sendEmail($toEmail, $toName, $subject, $html, $text);
 
             Log::info("Note shared email sent successfully to {$toEmail}");
             return true;
-        } catch (PHPMailerException $e) {
-            Log::error("PHPMailer failed to send note-shared email to {$toEmail}: " . $e->getMessage());
-            throw new \RuntimeException("Failed to send note-shared email: " . $e->getMessage(), 0, $e);
         } catch (\Exception $e) {
             Log::error("Failed to send note-shared email to {$toEmail}: " . $e->getMessage());
             throw new \RuntimeException("Failed to send note-shared email: " . $e->getMessage(), 0, $e);

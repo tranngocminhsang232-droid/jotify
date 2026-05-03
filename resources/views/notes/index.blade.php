@@ -1515,7 +1515,10 @@
                 try { offlineLabels = await window.getLabelsFromIDB(); } catch(e) {}
             }
 
-            if (offlineNotes.length > 0 && notesData.length === 0) {
+            // Always prefer IDB data when offline — the server-rendered `notesData`
+            // in the cached HTML page is STALE (from the last online visit).
+            // IDB data is kept up-to-date by auto-save + background sync.
+            if (offlineNotes.length > 0) {
                 window.renderNotes && window.renderNotes(offlineNotes);
             }
 

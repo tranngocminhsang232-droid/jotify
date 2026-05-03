@@ -613,9 +613,10 @@ var currentLabels = @json($note->labels->pluck('id'));
 
 // ─── Background IDB Sync: cache ALL notes for offline access ─────────────────
 // Runs in editor so user doesn't need to return to /notes list to populate cache.
+// Uses per-note upsert (NOT clear-all) to avoid overwriting fresh auto-save data.
 (async function backgroundIDBSync() {
     if (!navigator.onLine) return;
-    if (!window.saveNotesToIDB) {
+    if (!window.updateNoteInIDB) {
         // app.js may not be ready yet — retry after short delay
         setTimeout(backgroundIDBSync, 800);
         return;
@@ -626,8 +627,10 @@ var currentLabels = @json($note->labels->pluck('id'));
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (Array.isArray(data.notes) && data.notes.length > 0) {
-            await window.saveNotesToIDB(data.notes);
+        if (Array.isArray(data.notes)) {
+            for (const note of data.notes) {
+                await window.updateNoteInIDB(note);
+            }
         }
         if (Array.isArray(data.labels) && window.saveLabelsToIDB) {
             await window.saveLabelsToIDB(data.labels);

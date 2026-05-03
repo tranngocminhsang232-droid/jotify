@@ -16,8 +16,8 @@
  * ──────────────────────────────────────────────────────────
  */
 
-const CACHE_VER   = 'jotify-v17';
-const ASSET_CACHE = 'jotify-assets-v17';
+const CACHE_VER   = 'jotify-v18';
+const ASSET_CACHE = 'jotify-assets-v18';
 
 // ── Only pre-cache static files that DON'T require authentication ────────────
 // Auth routes (/notes, /profile) would 302 → /login during install,

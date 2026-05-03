@@ -15,12 +15,15 @@ cmds = [
   "php artisan view:cache"
 ]
 
-# config:cache AND route:cache are deliberately REMOVED from the build phase.
-# On Railway, environment variables are only available at RUNTIME, not during build.
-# Running config:cache during build bakes NULL values for APP_KEY, DB_HOST, etc.
-# into the cached config → 500 errors at runtime.
+# ─── IMPORTANT NOTES ──────────────────────────────────────────────────────────
 #
-# Instead, we cache config + routes at startup via the start command.
+# config:cache and route:cache are NOT run during build because Railway env
+# vars (APP_KEY, DB_HOST, etc.) are only available at RUNTIME, not during
+# the build phase. Caching config at build time bakes NULL values into the
+# cache → 500 errors at runtime.
+#
+# Instead, config:cache and route:cache run at startup (when env vars exist).
+# ──────────────────────────────────────────────────────────────────────────────
 
 [start]
-cmd = "php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+cmd = "php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link 2>/dev/null; php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"

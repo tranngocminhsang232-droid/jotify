@@ -57,6 +57,32 @@ Route::middleware('auth')->group(function () {
     Route::post('/preferences/theme', [PreferenceController::class, 'updateTheme'])->name('preferences.theme');
 
     // Notes
+    // ─── Offline data API (returns full content for IDB cache) ────────────
+    Route::get('/api/notes-offline-data', function () {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $notes = $user->notes()->with(['labels', 'shares'])->ordered()->get();
+        $labels = $user->labels()->orderBy('name')->get();
+
+        return response()->json([
+            'notes' => $notes->map(function ($n) {
+                return [
+                    'id'            => $n->id,
+                    'title'         => $n->title ?? '',
+                    'content'       => $n->content ?? '',
+                    'note_color'    => $n->note_color ?? 'none',
+                    'is_pinned'     => (bool) $n->is_pinned,
+                    'has_password'  => (bool) $n->has_password,
+                    'note_password' => $n->note_password ?? null,
+                    'is_shared'     => $n->shares->count() > 0,
+                    'labels'        => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
+                    'updated_at'    => $n->updated_at?->diffForHumans() ?? '',
+                    'created_at_ts' => $n->created_at?->timestamp ?? 0,
+                ];
+            })->values(),
+            'labels' => $labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values(),
+        ]);
+    })->name('api.notes-offline-data');
+
     Route::get('/notes', [NoteController::class, 'index'])->name('notes.index');
     Route::post('/notes', [NoteController::class, 'create'])->name('notes.create');
     Route::get('/notes/{id}/edit', [NoteController::class, 'edit'])->name('notes.edit');

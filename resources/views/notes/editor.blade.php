@@ -611,6 +611,30 @@
 var noteId = {{ $note->id }};
 var currentLabels = @json($note->labels->pluck('id'));
 
+// ─── Background IDB Sync: cache ALL notes for offline access ─────────────────
+// Runs in editor so user doesn't need to return to /notes list to populate cache.
+(async function backgroundIDBSync() {
+    if (!navigator.onLine) return;
+    if (!window.saveNotesToIDB) {
+        // app.js may not be ready yet — retry after short delay
+        setTimeout(backgroundIDBSync, 800);
+        return;
+    }
+    try {
+        const res = await fetch('/api/notes-offline-data', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.notes) && data.notes.length > 0) {
+            await window.saveNotesToIDB(data.notes);
+        }
+        if (Array.isArray(data.labels) && window.saveLabelsToIDB) {
+            await window.saveLabelsToIDB(data.labels);
+        }
+    } catch(e) { /* silent — non-critical background task */ }
+})();
+
 // ─── Offline IDB hydration: restore latest local edits on load ───────────────
 // If offline and we have a queued update for this note, show local version.
 (async function() {

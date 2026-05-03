@@ -1,7 +1,7 @@
 {
-    "name": "NoteKeeper",
-    "short_name": "NoteKeeper",
-    "description": "A modern note management application",
+    "name": "JOTIFY",
+    "short_name": "JOTIFY",
+    "description": "JOTIFY - A modern note management application",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",

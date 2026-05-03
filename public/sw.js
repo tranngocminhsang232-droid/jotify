@@ -1,23 +1,42 @@
 /**
- * sw.js — JOTIFY Service Worker v12
- * - Cache-First : static assets (CSS/JS/fonts/images)
- * - Network-First: pages + API — with offline HTML fallback for navigation
- * - Pre-caches profile pages so /profile works offline
+ * sw.js — JOTIFY Service Worker v17
+ * ──────────────────────────────────────────────────────────
+ * PRODUCTION-READY for Railway (HTTPS, reverse proxy)
+ *
+ * Strategies:
+ *   Cache-First  → static assets (CSS, JS, fonts, images)
+ *   Network-First → pages + API — with offline HTML fallback
+ *
+ * Key design decisions:
+ *   - Install pre-caches ONLY static files (no auth-required routes)
+ *   - Auth pages (/notes, /profile) are cached on-the-fly via fetch handler
+ *   - All cache keys use full URLs to avoid mismatch between
+ *     cache.put(string) and caches.match(Request)
+ *   - Origin check uses self.location.origin (works on any domain)
+ * ──────────────────────────────────────────────────────────
  */
 
-const CACHE_VER   = 'jotify-v15';
-const ASSET_CACHE = 'jotify-assets-v15';
+const CACHE_VER   = 'jotify-v17';
+const ASSET_CACHE = 'jotify-assets-v17';
 
-// Pages to pre-cache at install so navigation works offline
-const PRECACHE_PAGES = [
-    '/notes',              // main notes list
-    '/profile',
-    '/profile/edit',
-    '/offline-note.html',  // shell for dynamic note routes
+// ── Only pre-cache static files that DON'T require authentication ────────────
+// Auth routes (/notes, /profile) would 302 → /login during install,
+// which silently caches the login page as if it were the notes page.
+// Those routes are cached on-the-fly when the user navigates while online.
+const PRECACHE_URLS = [
+    '/offline-note.html',
+    '/offline.html',
+    '/manifest.json',
+    '/jotify-logo.png',
 ];
 
-// Minimal offline shell returned when page is not in cache and network fails
-function offlineShell(url) {
+// ── Resolve a path to a full URL on this origin ──────────────────────────────
+function fullUrl(path) {
+    return new URL(path, self.location.origin).href;
+}
+
+// ── Minimal offline shell (inline HTML) ──────────────────────────────────────
+function offlineShell(pathname) {
     return new Response(
         `<!DOCTYPE html><html><head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -28,44 +47,69 @@ function offlineShell(url) {
                  min-height:100vh;margin:0;gap:1rem;text-align:center;padding:1rem;}
             h1{font-size:1.5rem;margin:0}p{color:#a3e6bb;margin:0}
             a{color:#22c55e;text-decoration:underline}
+            button{margin-top:1rem;background:#22c55e;color:#fff;border:none;padding:0.7rem 1.5rem;
+                   border-radius:0.75rem;font-size:0.9rem;font-weight:700;cursor:pointer;}
         </style></head><body>
         <h1>📴 You are offline</h1>
-        <p>The page <strong>${url}</strong> hasn't been cached yet.</p>
+        <p>The page <strong>${pathname}</strong> hasn't been cached yet.</p>
         <p>Please <a href="/notes">go back to Notes</a> and try again when you're online.</p>
+        <button onclick="location.reload()">Retry</button>
         </body></html>`,
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
 }
 
-// ── INSTALL — pre-cache profile pages ────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// INSTALL — pre-cache static files (robust: one failure does NOT block others)
+// ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
+    console.log('[SW] Installing', CACHE_VER);
     event.waitUntil(
-        caches.open(CACHE_VER).then(cache =>
-            Promise.all(
-                PRECACHE_PAGES.map(url =>
-                    fetch(url, { credentials: 'include', cache: 'no-store' })
-                        .then(r => { if (r.ok) cache.put(url, r); })
-                        .catch(() => {}) // skip if server unreachable at install time
-                )
-            )
-        ).then(() => self.skipWaiting())
+        caches.open(CACHE_VER).then(cache => {
+            // Fetch each URL independently — one failure won't break the rest
+            return Promise.all(
+                PRECACHE_URLS.map(path => {
+                    const url = fullUrl(path);
+                    return fetch(new Request(url, { cache: 'no-store' }))
+                        .then(res => {
+                            if (res.ok) {
+                                console.log('[SW] Pre-cached:', path, '→', res.status);
+                                return cache.put(url, res);
+                            }
+                            console.warn('[SW] Pre-cache skip (not ok):', path, '→', res.status);
+                        })
+                        .catch(err => {
+                            console.warn('[SW] Pre-cache failed:', path, '→', err.message);
+                        });
+                })
+            );
+        }).then(() => {
+            console.log('[SW] Install complete, skipWaiting');
+            return self.skipWaiting();
+        })
     );
 });
 
-// ── ACTIVATE — delete old caches ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// ACTIVATE — clean old caches + claim all clients immediately
+// ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('activate', (event) => {
+    console.log('[SW] Activating', CACHE_VER);
     event.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(
-                keys
-                    .filter(k => k !== CACHE_VER && k !== ASSET_CACHE)
-                    .map(k => caches.delete(k))
-            )
-        ).then(() => self.clients.claim())
+        caches.keys().then(keys => {
+            const old = keys.filter(k => k !== CACHE_VER && k !== ASSET_CACHE);
+            if (old.length) console.log('[SW] Deleting old caches:', old);
+            return Promise.all(old.map(k => caches.delete(k)));
+        }).then(() => {
+            console.log('[SW] Claiming clients');
+            return self.clients.claim();
+        })
     );
 });
 
-// ── MESSAGE — CACHE_PAGES / SKIP_WAITING ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// MESSAGE — CACHE_PAGES (from page JS) + SKIP_WAITING
+// ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('message', (event) => {
     if (!event.data) return;
 
@@ -74,18 +118,34 @@ self.addEventListener('message', (event) => {
         return;
     }
 
+    // Page asks us to cache specific URLs (used after login to warm auth pages)
     if (event.data.type === 'CACHE_PAGES' && Array.isArray(event.data.pages)) {
+        console.log('[SW] CACHE_PAGES received:', event.data.pages);
         caches.open(CACHE_VER).then(cache => {
-            event.data.pages.forEach(url => {
-                fetch(url, { cache: 'no-store' })
-                    .then(r => { if (r.ok) cache.put(url, r); })
-                    .catch(() => {});
+            event.data.pages.forEach(path => {
+                const url = fullUrl(path);
+                fetch(new Request(url, { credentials: 'include', cache: 'no-store' }))
+                    .then(res => {
+                        if (res.ok && !res.redirected) {
+                            // Only cache if we got the actual page, NOT a redirect to /login
+                            cache.put(url, res);
+                            console.log('[SW] Cached (msg):', path, '→', res.status);
+                        } else {
+                            console.warn('[SW] Skip cache (msg):', path,
+                                '→ status:', res.status, 'redirected:', res.redirected);
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('[SW] Cache failed (msg):', path, '→', err.message);
+                    });
             });
         });
     }
 });
 
-// ── FETCH ─────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// FETCH — intercept ALL same-origin GET requests
+// ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('fetch', (event) => {
     const req = event.request;
     const url = new URL(req.url);
@@ -93,29 +153,40 @@ self.addEventListener('fetch', (event) => {
     // Only handle GET
     if (req.method !== 'GET') return;
 
-    // Skip external, chrome-ext, websockets
-    if (url.protocol === 'chrome-extension:') return;
-    if (!url.hostname.includes('localhost') && !url.hostname.includes('127.0.0.1')) return;
-    if (req.url.includes('pusher') || req.url.includes('broadcasting/auth')) return;
+    // Skip chrome-extension, blob, data URLs
+    if (url.protocol === 'chrome-extension:' || url.protocol === 'blob:' ||
+        url.protocol === 'data:') return;
 
-    // Cache-First: static assets
+    // ★ Skip cross-origin requests (CDN fonts, Pusher, external APIs)
+    //   This replaces the old localhost filter — works on ANY domain.
+    if (url.origin !== self.location.origin) return;
+
+    // Skip Pusher/WebSocket auth
+    if (url.pathname.includes('broadcasting/auth')) return;
+
+    // ── Cache-First: static assets ───────────────────────────────────────
     if (
         url.pathname.startsWith('/build/') ||
         url.pathname.startsWith('/storage/') ||
-        url.pathname.match(/\.(css|js|woff2?|ttf|svg|png|jpg|ico|webp)$/)
+        url.pathname.startsWith('/js/') ||
+        url.pathname.startsWith('/fonts/') ||
+        url.pathname.match(/\.(css|js|woff2?|ttf|svg|png|jpg|jpeg|ico|webp|gif)$/)
     ) {
         event.respondWith(cacheFirst(req));
         return;
     }
 
-    // Network-First: everything else (pages, API)
+    // ── Network-First: pages + API ───────────────────────────────────────
     event.respondWith(networkFirst(req));
 });
 
-// ── Cache-First ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// CACHE-FIRST — for versioned/static assets (CSS, JS, fonts, images)
+// ══════════════════════════════════════════════════════════════════════════════
 async function cacheFirst(req) {
     const cached = await caches.match(req);
     if (cached) return cached;
+
     try {
         const res = await fetch(req);
         if (res.ok) {
@@ -124,35 +195,48 @@ async function cacheFirst(req) {
         }
         return res;
     } catch {
-        return new Response('Asset unavailable', { status: 503 });
+        // Asset unavailable offline — return transparent fallback
+        return new Response('', { status: 503, statusText: 'Asset unavailable offline' });
     }
 }
 
-// ── Network-First ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// NETWORK-FIRST — for pages + API (cache on success, serve cache when offline)
+// ══════════════════════════════════════════════════════════════════════════════
 async function networkFirst(req) {
     const url = new URL(req.url);
+
     try {
         const res = await fetch(req);
-        if (res.ok) {
-            // Cache successful page responses for offline fallback
+
+        // Cache successful, non-redirected responses
+        // (don't cache 302→login responses under the original URL)
+        if (res.ok && !res.redirected) {
             const cache = await caches.open(CACHE_VER);
             cache.put(req, res.clone());
         }
+
         return res;
     } catch {
-        // Offline — for note editor routes, always prefer the IDB-backed shell
-        // over potentially stale cached HTML (e.g. from initial creation with empty title)
+        // ── Offline fallback logic ───────────────────────────────────────
+
+        // Note editor routes → always serve the IDB-backed offline shell
+        // (avoids serving stale cached HTML with wrong title/content)
         if (req.mode === 'navigate' && /^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
-            const shell = await caches.match('/offline-note.html');
+            const shell = await caches.match(fullUrl('/offline-note.html'));
             if (shell) return shell;
         }
 
-        // Other pages — try cache
+        // Try to find this exact URL in cache
         const cached = await caches.match(req);
         if (cached) return cached;
 
+        // Navigation: return branded offline page
         if (req.mode === 'navigate') {
-            // All other navigation: branded offline page
+            // Try the pre-cached offline.html first
+            const offlinePage = await caches.match(fullUrl('/offline.html'));
+            if (offlinePage) return offlinePage;
+            // Last resort: inline offline shell
             return offlineShell(url.pathname);
         }
 

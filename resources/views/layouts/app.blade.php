@@ -845,42 +845,51 @@
     @stack('scripts')
 
     <script data-layout="1">
-    // ── Service Worker: register + force update + pre-warm profile pages ──
+    // ── Service Worker: register + force update + pre-warm pages into cache ──
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('{{ asset('sw.js') }}')
+            // Use relative path '/sw.js' — NOT asset('sw.js') which can generate
+            // HTTP URLs behind Railway's HTTPS reverse proxy → scheme mismatch
+            navigator.serviceWorker.register('/sw.js')
                 .then(reg => {
+                    console.log('[SW-Reg] Registered, scope:', reg.scope);
                     reg.addEventListener('updatefound', () => {
                         const newWorker = reg.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('[SW-Reg] New SW installed, sending SKIP_WAITING');
                                 newWorker.postMessage({ type: 'SKIP_WAITING' });
                             }
                         });
                     });
                     reg.update(); // check for new version on each load
-                    // Pre-warm profile + offline note shell into cache
+
+                    // Pre-warm auth pages + offline shells into SW cache.
+                    // This runs AFTER login (inside @auth), so the cookies are
+                    // valid and the SW will get 200 responses (not 302→login).
                     @auth
-                    if (navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({
-                            type: 'CACHE_PAGES',
-                            pages: ['/notes', '/profile', '/profile/edit', '/offline-note.html']
-                        });
+                    const warmPages = ['/notes', '/profile', '/profile/edit', '/offline-note.html'];
+                    function sendCacheMsg() {
+                        if (navigator.serviceWorker.controller) {
+                            console.log('[SW-Reg] Sending CACHE_PAGES:', warmPages);
+                            navigator.serviceWorker.controller.postMessage({
+                                type: 'CACHE_PAGES',
+                                pages: warmPages
+                            });
+                        }
                     }
-                    // Also cache on controller change (first activation)
+                    sendCacheMsg();
+                    // Also send on controller change (first activation)
                     navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        navigator.serviceWorker.controller?.postMessage({
-                            type: 'CACHE_PAGES',
-                            pages: ['/notes', '/profile', '/profile/edit', '/offline-note.html']
-                        });
+                        sendCacheMsg();
                     });
                     @endauth
                 })
-                .catch(err => console.warn('SW registration failed:', err));
+                .catch(err => console.warn('[SW-Reg] Registration failed:', err));
         });
-        // Reload khi SW mới take control
+        // Reload when new SW takes control (optional)
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!window._swReloaded) { window._swReloaded = true; /* optional: location.reload(); */ }
+            if (!window._swReloaded) { window._swReloaded = true; }
         });
     }
     </script>

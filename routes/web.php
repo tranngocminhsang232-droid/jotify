@@ -20,53 +20,65 @@ Route::get('/', function () {
 Route::get('/debug-500', function () {
     $results = [];
 
-    // 1. Check APP_KEY
-    $results['APP_KEY'] = config('app.key') ? '✅ Set (' . substr(config('app.key'), 0, 10) . '...)' : '❌ NULL/EMPTY';
+    // 1. Config check
+    $results['APP_KEY'] = config('app.key') ? '✅ Set' : '❌ NULL';
     $results['APP_ENV'] = config('app.env');
-    $results['APP_DEBUG'] = config('app.debug') ? 'true' : 'false';
     $results['APP_URL'] = config('app.url');
+    $results['CONFIG_CACHED'] = file_exists(base_path('bootstrap/cache/config.php')) ? 'YES' : 'NO';
 
-    // 2. Check DB connection
-    $results['DB_CONNECTION'] = config('database.default');
-    $results['DB_HOST'] = config('database.connections.' . config('database.default') . '.host', 'N/A');
-    $results['DB_DATABASE'] = config('database.connections.' . config('database.default') . '.database', 'N/A');
-
+    // 2. DB check
     try {
         \Illuminate\Support\Facades\DB::connection()->getPdo();
         $results['DB_STATUS'] = '✅ Connected';
     } catch (\Exception $e) {
-        $results['DB_STATUS'] = '❌ FAILED: ' . $e->getMessage();
+        $results['DB_STATUS'] = '❌ ' . $e->getMessage();
     }
 
-    // 3. Check session driver
-    $results['SESSION_DRIVER'] = config('session.driver');
-    $results['CACHE_STORE'] = config('cache.default');
+    // 3. Vite manifest check
+    $manifestPath = public_path('build/manifest.json');
+    $results['VITE_MANIFEST'] = file_exists($manifestPath) ? '✅ Exists' : '❌ MISSING at ' . $manifestPath;
+    
+    $manifestPath2 = public_path('build/.vite/manifest.json');
+    $results['VITE_MANIFEST_V5'] = file_exists($manifestPath2) ? '✅ Exists' : '❌ MISSING at ' . $manifestPath2;
 
-    // 4. Check if sessions table exists
-    if (config('session.driver') === 'database') {
-        try {
-            $tableExists = \Illuminate\Support\Facades\Schema::hasTable(config('session.table', 'sessions'));
-            $results['SESSIONS_TABLE'] = $tableExists ? '✅ Exists' : '❌ Missing';
-        } catch (\Exception $e) {
-            $results['SESSIONS_TABLE'] = '❌ Error: ' . $e->getMessage();
+    // 4. Check public/build directory
+    $buildDir = public_path('build');
+    if (is_dir($buildDir)) {
+        $results['BUILD_DIR'] = '✅ Exists: ' . implode(', ', array_slice(scandir($buildDir), 0, 10));
+    } else {
+        $results['BUILD_DIR'] = '❌ MISSING';
+    }
+
+    // 5. Try rendering the login view — catch exact error
+    try {
+        $html = view('auth.login')->render();
+        $results['VIEW_RENDER'] = '✅ Login view renders (' . strlen($html) . ' bytes)';
+    } catch (\Throwable $e) {
+        $results['VIEW_RENDER'] = '❌ FAILED';
+        $results['VIEW_ERROR_CLASS'] = get_class($e);
+        $results['VIEW_ERROR_MSG'] = $e->getMessage();
+        $results['VIEW_ERROR_FILE'] = $e->getFile() . ':' . $e->getLine();
+        // Get the previous exception if wrapped
+        if ($e->getPrevious()) {
+            $prev = $e->getPrevious();
+            $results['VIEW_PREV_ERROR'] = get_class($prev) . ': ' . $prev->getMessage();
+            $results['VIEW_PREV_FILE'] = $prev->getFile() . ':' . $prev->getLine();
         }
     }
 
-    // 5. Check if cache table exists
-    if (config('cache.default') === 'database') {
-        try {
-            $tableExists = \Illuminate\Support\Facades\Schema::hasTable('cache');
-            $results['CACHE_TABLE'] = $tableExists ? '✅ Exists' : '❌ Missing';
-        } catch (\Exception $e) {
-            $results['CACHE_TABLE'] = '❌ Error: ' . $e->getMessage();
-        }
+    // 6. Try rendering just the layout
+    try {
+        $html = view('layouts.app', ['slot' => ''])->render();
+        $results['LAYOUT_RENDER'] = '✅ Layout renders (' . strlen($html) . ' bytes)';
+    } catch (\Throwable $e) {
+        $results['LAYOUT_RENDER'] = '❌ FAILED';
+        $results['LAYOUT_ERROR_CLASS'] = get_class($e);
+        $results['LAYOUT_ERROR_MSG'] = $e->getMessage();
+        $results['LAYOUT_ERROR_FILE'] = $e->getFile() . ':' . $e->getLine();
     }
-
-    // 6. Check config cache status
-    $results['CONFIG_CACHED'] = file_exists(base_path('bootstrap/cache/config.php')) ? 'YES' : 'NO';
 
     return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+});
 // ─── END TEMPORARY DEBUG ROUTE ─────────────────────────────────────────────
 
 // Guest routes

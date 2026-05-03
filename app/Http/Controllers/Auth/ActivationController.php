@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\MailService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ActivationController extends Controller
 {
@@ -37,9 +38,15 @@ class ActivationController extends Controller
         $token = \Str::random(64);
         $user->update(['activation_token' => $token]);
 
-        // Resend activation email via PHPMailer
-        MailService::sendActivationEmail($user, url('/activate/' . $token));
+        // Resend activation email — handle failure explicitly
+        $activationUrl = url('/activate/' . $token);
 
-        return back()->with('success', 'Activation email has been resent. Please check your inbox.');
+        try {
+            MailService::sendActivationEmail($user, $activationUrl);
+            return back()->with('success', 'Activation email has been resent. Please check your inbox.');
+        } catch (\RuntimeException $e) {
+            Log::error("Resend activation email failed for {$user->email}: " . $e->getMessage());
+            return back()->with('error', 'Unable to send activation email. Please try again later or contact support.');
+        }
     }
 }

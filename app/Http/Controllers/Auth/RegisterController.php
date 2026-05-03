@@ -9,6 +9,7 @@ use App\Services\MailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class RegisterController extends Controller
@@ -42,12 +43,24 @@ class RegisterController extends Controller
             'user_id' => $user->id,
         ]);
 
-        // Send activation email via PHPMailer
-        MailService::sendActivationEmail($user, url('/activate/' . $activationToken));
+        // Send activation email via PHPMailer — handle failure explicitly
+        $activationUrl = url('/activate/' . $activationToken);
+        $emailSent = false;
+
+        try {
+            $emailSent = MailService::sendActivationEmail($user, $activationUrl);
+        } catch (\RuntimeException $e) {
+            Log::error("Registration email failed for {$user->email}: " . $e->getMessage());
+            $emailSent = false;
+        }
 
         // Auto-login after registration
         Auth::login($user);
 
-        return redirect('/notes')->with('success', 'Registration successful! Please check your email to activate your account.');
+        if ($emailSent) {
+            return redirect('/notes')->with('success', 'Registration successful! Please check your email to activate your account.');
+        } else {
+            return redirect('/notes')->with('warning', 'Account created successfully! However, the activation email could not be sent. Please use the "Resend Activation" button to try again.');
+        }
     }
 }

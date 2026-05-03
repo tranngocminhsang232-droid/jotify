@@ -31,12 +31,17 @@ class ForgotPasswordController extends Controller
             ['token' => Hash::make($token), 'otp' => $otp, 'created_at' => now()]
         );
 
-        // Gửi email reset password
-        MailService::sendPasswordResetEmail(
-            $request->email,
-            url('/reset-password/' . $token . '?email=' . urlencode($request->email)),
-            $otp
-        );
+        // Gửi email reset password — handle failure explicitly
+        try {
+            MailService::sendPasswordResetEmail(
+                $request->email,
+                url('/reset-password/' . $token . '?email=' . urlencode($request->email)),
+                $otp
+            );
+        } catch (\RuntimeException $e) {
+            \Log::error("Password reset email failed for {$request->email}: " . $e->getMessage());
+            return back()->with('error', 'Unable to send reset email. Please try again later.');
+        }
 
         // Redirect về cùng trang, mở panel OTP
         return redirect('/forgot-password?panel=otp&email=' . urlencode($request->email))

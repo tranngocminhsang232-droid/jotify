@@ -448,6 +448,26 @@
             </div>
             @endif
 
+            @if(session('warning'))
+            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)"
+                 x-transition class="mx-4 lg:mx-6 mt-4">
+                <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex items-center gap-2">
+                    <span class="material-icons-outlined text-amber-500 text-lg">warning</span>
+                    <span class="text-sm text-amber-600 dark:text-amber-400">{{ session('warning') }}</span>
+                </div>
+            </div>
+            @endif
+
+            @if(session('error'))
+            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)"
+                 x-transition class="mx-4 lg:mx-6 mt-4">
+                <div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2">
+                    <span class="material-icons-outlined text-red-500 text-lg">error</span>
+                    <span class="text-sm text-red-600 dark:text-red-400">{{ session('error') }}</span>
+                </div>
+            </div>
+            @endif
+
             @if($errors->any())
             <div class="mx-4 lg:mx-6 mt-4">
                 <div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">

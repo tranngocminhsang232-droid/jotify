@@ -187,6 +187,9 @@ body { padding: 0 !important; margin: 0 !important; }
                         <p>We'll send you a reset link & OTP code</p>
                     </div>
 
+                    @if(session('error'))
+                    <div class="auth-alert-error">{{ session('error') }}</div>
+                    @endif
                     @if($errors->any() && !request('panel'))
                     <div class="auth-alert-error">
                         @foreach($errors->all() as $err)<div>{{ $err }}</div>@endforeach

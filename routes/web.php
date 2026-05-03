@@ -133,4 +133,56 @@ if (config('app.debug')) {
             ]);
         });
     });
+
+    // ─── MAIL DIAGNOSTIC (debug only) ──────────────────────────────────────
+    Route::get('/debug/test-mail', function () {
+        $config = [
+            'MAIL_MAILER'       => config('mail.default'),
+            'MAIL_HOST'         => config('mail.mailers.smtp.host'),
+            'MAIL_PORT'         => config('mail.mailers.smtp.port'),
+            'MAIL_SCHEME'       => config('mail.mailers.smtp.scheme'),
+            'MAIL_USERNAME'     => config('mail.mailers.smtp.username') ? '✅ SET' : '❌ MISSING',
+            'MAIL_PASSWORD'     => config('mail.mailers.smtp.password') ? '✅ SET' : '❌ MISSING',
+            'MAIL_FROM_ADDRESS' => config('mail.from.address'),
+            'MAIL_FROM_NAME'    => config('mail.from.name'),
+            'APP_URL'           => config('app.url'),
+            'APP_ENV'           => config('app.env'),
+        ];
+
+        $result = ['config' => $config, 'test_email' => null];
+
+        // If ?send=YOUR_EMAIL is provided, actually send a test email
+        $sendTo = request('send');
+        if ($sendTo && filter_var($sendTo, FILTER_VALIDATE_EMAIL)) {
+            try {
+                $user = new \stdClass();
+                $user->email = $sendTo;
+                $user->display_name = 'Test User';
+                $user->name = 'test';
+
+                \App\Services\MailService::sendActivationEmail(
+                    $user,
+                    url('/activate/test-token-' . time())
+                );
+
+                $result['test_email'] = [
+                    'status' => '✅ SUCCESS',
+                    'sent_to' => $sendTo,
+                    'message' => 'Email sent successfully! Check the inbox.',
+                ];
+            } catch (\Exception $e) {
+                $result['test_email'] = [
+                    'status' => '❌ FAILED',
+                    'sent_to' => $sendTo,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        } else {
+            $result['test_email'] = [
+                'usage' => 'Add ?send=your@email.com to actually send a test email',
+            ];
+        }
+
+        return response()->json($result, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    });
 }

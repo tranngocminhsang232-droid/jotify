@@ -36,13 +36,17 @@ class SendNoteSharedEmail
             'email'        => $this->sharerEmail,
         ];
 
-        MailService::sendNoteSharedEmail(
-            $this->toEmail,
-            $this->toName,
-            $note,
-            $this->shareUrl,
-            $sharer,
-            $this->permission,
-        );
+        try {
+            MailService::sendNoteSharedEmail(
+                $this->toEmail,
+                $this->toName,
+                $note,
+                $this->shareUrl,
+                $sharer,
+                $this->permission,
+            );
+        } catch (\RuntimeException $e) {
+            \Log::error("SendNoteSharedEmail job failed for {$this->toEmail}: " . $e->getMessage());
+        }
     }
 }

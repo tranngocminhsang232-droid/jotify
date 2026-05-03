@@ -10,7 +10,7 @@
                         background:linear-gradient(135deg,#dcfce7,#bbf7d0);
                         border:2px solid #86efac;
                         text-align:center;line-height:72px;font-size:32px;">
-                ✉️
+                &#9993;
             </div>
         </td>
     </tr>
@@ -29,7 +29,7 @@
         <td align="center" style="padding-bottom:32px;">
             <p style="margin:0;font-size:15px;color:#166534;line-height:1.6;max-width:400px;">
                 Hi <strong style="color:#15803d;">{{ $user->display_name ?? $user->name }}</strong>,
-                welcome to JOTIFY! 🎉<br>
+                welcome to JOTIFY!<br>
                 Please activate your account to start organizing your notes.
             </p>
         </td>
@@ -44,7 +44,7 @@
                       padding:16px 40px;border-radius:14px;
                       font-size:16px;font-weight:700;letter-spacing:0.02em;
                       box-shadow:0 8px 24px rgba(34,197,94,0.40);">
-                ✅ Activate My Account
+                Activate My Account
             </a>
         </td>
     </tr>
@@ -83,7 +83,7 @@
                     <td style="background:#f0fdf4;border-radius:12px;border:1px solid #bbf7d0;
                                padding:14px 18px;">
                         <p style="margin:0;font-size:13px;color:#166534;text-align:center;">
-                            🔒 This link expires in <strong>24 hours</strong>.
+                            This link expires in <strong>24 hours</strong>.
                             If you didn't create a JOTIFY account, you can safely ignore this email.
                         </p>
                     </td>

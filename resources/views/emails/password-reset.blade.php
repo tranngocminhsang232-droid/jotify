@@ -10,7 +10,7 @@
                         background:linear-gradient(135deg,#fef9c3,#fde68a);
                         border:2px solid #fcd34d;
                         text-align:center;line-height:72px;font-size:32px;">
-                🔐
+                &#128272;
             </div>
         </td>
     </tr>
@@ -43,7 +43,7 @@
                       padding:16px 40px;border-radius:14px;
                       font-size:16px;font-weight:700;letter-spacing:0.02em;
                       box-shadow:0 8px 24px rgba(34,197,94,0.38);">
-                🔑 Reset My Password
+                Reset My Password
             </a>
         </td>
     </tr>
@@ -90,7 +90,7 @@
                     <td style="background:#fefce8;border-radius:12px;border:1px solid #fde68a;
                                padding:14px 18px;">
                         <p style="margin:0;font-size:13px;color:#854d0e;text-align:center;">
-                            ⏱️ This code and link expire in <strong>60 minutes</strong>.
+                            This code and link expire in <strong>60 minutes</strong>.
                             Do not share this with anyone.
                         </p>
                     </td>

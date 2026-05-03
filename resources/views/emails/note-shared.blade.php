@@ -10,7 +10,7 @@
                         background:linear-gradient(135deg,#dcfce7,#bbf7d0);
                         border:2px solid #4ade80;
                         text-align:center;line-height:72px;font-size:32px;">
-                📝
+                &#9997;
             </div>
         </td>
     </tr>
@@ -68,9 +68,9 @@
                                            color:#ffffff;border-radius:8px;padding:5px 14px;
                                            font-size:12px;font-weight:700;letter-spacing:0.04em;">
                                     @if($permission === 'edit')
-                                        ✏️ Can Edit
+                                        Can Edit
                                     @else
-                                        👁️ Read Only
+                                        Read Only
                                     @endif
                                 </td>
                                 <td style="padding-left:12px;font-size:13px;color:#6b7280;">
@@ -94,7 +94,7 @@
                       padding:16px 40px;border-radius:14px;
                       font-size:16px;font-weight:700;letter-spacing:0.02em;
                       box-shadow:0 8px 24px rgba(34,197,94,0.38);">
-                📂 View Shared Note
+                View Shared Note
             </a>
         </td>
     </tr>
@@ -107,7 +107,7 @@
                     <td style="background:#f0fdf4;border-radius:12px;border:1px solid #bbf7d0;
                                padding:14px 18px;">
                         <p style="margin:0;font-size:13px;color:#166534;text-align:center;">
-                            💡 Log in to your JOTIFY account to access this note.
+                            Log in to your JOTIFY account to access this note.
                             It will appear in your <strong>"Shared with Me"</strong> section.
                         </p>
                     </td>

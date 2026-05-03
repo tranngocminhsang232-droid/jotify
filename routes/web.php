@@ -16,6 +16,59 @@ Route::get('/', function () {
     return auth()->check() ? redirect('/notes') : redirect('/login');
 });
 
+// ─── TEMPORARY DEBUG ROUTE (REMOVE AFTER FIXING 500) ───────────────────────
+Route::get('/debug-500', function () {
+    $results = [];
+
+    // 1. Check APP_KEY
+    $results['APP_KEY'] = config('app.key') ? '✅ Set (' . substr(config('app.key'), 0, 10) . '...)' : '❌ NULL/EMPTY';
+    $results['APP_ENV'] = config('app.env');
+    $results['APP_DEBUG'] = config('app.debug') ? 'true' : 'false';
+    $results['APP_URL'] = config('app.url');
+
+    // 2. Check DB connection
+    $results['DB_CONNECTION'] = config('database.default');
+    $results['DB_HOST'] = config('database.connections.' . config('database.default') . '.host', 'N/A');
+    $results['DB_DATABASE'] = config('database.connections.' . config('database.default') . '.database', 'N/A');
+
+    try {
+        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        $results['DB_STATUS'] = '✅ Connected';
+    } catch (\Exception $e) {
+        $results['DB_STATUS'] = '❌ FAILED: ' . $e->getMessage();
+    }
+
+    // 3. Check session driver
+    $results['SESSION_DRIVER'] = config('session.driver');
+    $results['CACHE_STORE'] = config('cache.default');
+
+    // 4. Check if sessions table exists
+    if (config('session.driver') === 'database') {
+        try {
+            $tableExists = \Illuminate\Support\Facades\Schema::hasTable(config('session.table', 'sessions'));
+            $results['SESSIONS_TABLE'] = $tableExists ? '✅ Exists' : '❌ Missing';
+        } catch (\Exception $e) {
+            $results['SESSIONS_TABLE'] = '❌ Error: ' . $e->getMessage();
+        }
+    }
+
+    // 5. Check if cache table exists
+    if (config('cache.default') === 'database') {
+        try {
+            $tableExists = \Illuminate\Support\Facades\Schema::hasTable('cache');
+            $results['CACHE_TABLE'] = $tableExists ? '✅ Exists' : '❌ Missing';
+        } catch (\Exception $e) {
+            $results['CACHE_TABLE'] = '❌ Error: ' . $e->getMessage();
+        }
+    }
+
+    // 6. Check config cache status
+    $results['CONFIG_CACHED'] = file_exists(base_path('bootstrap/cache/config.php')) ? 'YES' : 'NO';
+
+    return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+// ─── END TEMPORARY DEBUG ROUTE ─────────────────────────────────────────────
+
 // Guest routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showForm'])->name('login');

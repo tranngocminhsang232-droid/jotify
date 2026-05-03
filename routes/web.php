@@ -136,20 +136,19 @@ if (config('app.debug')) {
 
     // ─── MAIL DIAGNOSTIC (debug only) ──────────────────────────────────────
     Route::get('/debug/test-mail', function () {
-        $transport = \App\Services\MailService::activeTransport();
-        $brevoKey  = config('services.brevo.key');
-        $resendKey = config('services.resend.key');
+        $transport  = \App\Services\MailService::activeTransport();
 
         $transportLabels = [
-            'brevo'  => '🚀 Brevo HTTP API',
-            'resend' => '🚀 Resend HTTP API',
-            'smtp'   => '📧 PHPMailer SMTP',
+            'gmail_webhook' => '📨 Gmail Apps Script Webhook',
+            'brevo'         => '🚀 Brevo HTTP API',
+            'mailjet'       => '🚀 Mailjet HTTP API',
+            'resend'        => '🚀 Resend HTTP API',
+            'smtp'          => '📧 PHPMailer SMTP',
         ];
 
         $config = [
-            'ACTIVE_TRANSPORT'  => $transportLabels[$transport] ?? $transport,
-            'BREVO_API_KEY'     => $brevoKey  ? '✅ SET (' . substr($brevoKey, 0, 10) . '...)' : '❌ NOT SET',
-            'RESEND_API_KEY'    => $resendKey ? '✅ SET (' . substr($resendKey, 0, 8) . '...)' : '❌ NOT SET',
+            'ACTIVE_TRANSPORT'    => $transportLabels[$transport] ?? $transport,
+            'GMAIL_WEBHOOK_URL'   => config('services.gmail_webhook.url') ? '✅ SET' : '❌ NOT SET',
             'MAIL_FROM_ADDRESS' => config('mail.from.address'),
             'MAIL_FROM_NAME'    => config('mail.from.name'),
             'APP_URL'           => config('app.url'),

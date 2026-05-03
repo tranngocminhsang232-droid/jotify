@@ -18,8 +18,18 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
+    'gmail_webhook' => [
+        'url'    => env('GMAIL_WEBHOOK_URL'),
+        'secret' => env('GMAIL_WEBHOOK_SECRET', ''),
+    ],
+
     'brevo' => [
         'key' => env('BREVO_API_KEY'),
+    ],
+
+    'mailjet' => [
+        'key'    => env('MAILJET_API_KEY'),
+        'secret' => env('MAILJET_API_SECRET'),
     ],
 
     'resend' => [

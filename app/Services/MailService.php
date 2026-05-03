@@ -11,11 +11,13 @@ use Illuminate\Support\Facades\Log;
 class MailService
 {
     // ─── TRANSPORT SELECTION ───────────────────────────────────────────────
-    // Priority: BREVO_API_KEY → RESEND_API_KEY → PHPMailer SMTP
+    // Priority: GMAIL_WEBHOOK → BREVO → MAILJET → RESEND → PHPMailer SMTP
     //
-    // Brevo  = free 300 emails/day, verify sender EMAIL only (no domain needed)
-    // Resend = free 100 emails/day, requires domain verification
-    // SMTP   = works on localhost/XAMPP, blocked on Railway/cloud
+    // Gmail Webhook = Google Apps Script, uses YOUR Gmail, HTTPS, no signup
+    // Brevo   = free 300 emails/day, needs account activation
+    // Mailjet = free 200 emails/day, needs business verification
+    // Resend  = free 100 emails/day, needs domain verification
+    // SMTP    = works on localhost/XAMPP, blocked on Railway/cloud
     // ──────────────────────────────────────────────────────────────────────
 
     /**
@@ -23,8 +25,10 @@ class MailService
      */
     public static function activeTransport(): string
     {
-        if (config('services.brevo.key'))  return 'brevo';
-        if (config('services.resend.key')) return 'resend';
+        if (config('services.gmail_webhook.url'))  return 'gmail_webhook';
+        if (config('services.brevo.key'))           return 'brevo';
+        if (config('services.mailjet.key'))         return 'mailjet';
+        if (config('services.resend.key'))          return 'resend';
         return 'smtp';
     }
 
@@ -43,10 +47,69 @@ class MailService
         $transport = self::activeTransport();
 
         match ($transport) {
-            'brevo'  => self::sendViaBrevo($to, $toName, $subject, $htmlBody, $textBody),
-            'resend' => self::sendViaResend($to, $toName, $subject, $htmlBody, $textBody),
-            default  => self::sendViaSmtp($to, $toName, $subject, $htmlBody, $textBody),
+            'gmail_webhook' => self::sendViaGmailWebhook($to, $toName, $subject, $htmlBody, $textBody),
+            'brevo'         => self::sendViaBrevo($to, $toName, $subject, $htmlBody, $textBody),
+            'mailjet'       => self::sendViaMailjet($to, $toName, $subject, $htmlBody, $textBody),
+            'resend'        => self::sendViaResend($to, $toName, $subject, $htmlBody, $textBody),
+            default         => self::sendViaSmtp($to, $toName, $subject, $htmlBody, $textBody),
         };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  GMAIL APPS SCRIPT WEBHOOK TRANSPORT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Send email via Google Apps Script webhook (HTTPS).
+     * Uses the user's own Gmail account — no third-party service needed.
+     * Free quota: ~100 emails/day on consumer Gmail.
+     *
+     * @throws \RuntimeException on API error
+     */
+    private static function sendViaGmailWebhook(
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        $webhookUrl = config('services.gmail_webhook.url');
+        $secret     = config('services.gmail_webhook.secret', '');
+        $fromName   = config('mail.from.name', config('app.name', 'JOTIFY'));
+
+        $payload = [
+            'secret'   => $secret,
+            'to'       => $to,
+            'toName'   => $toName,
+            'subject'  => $subject,
+            'html'     => $htmlBody,
+            'text'     => $textBody,
+            'fromName' => $fromName,
+        ];
+
+        Log::debug('Gmail Webhook request', [
+            'to'      => $to,
+            'subject' => $subject,
+            'url'     => substr($webhookUrl, 0, 50) . '...',
+        ]);
+
+        $response = Http::timeout(20)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post($webhookUrl, $payload);
+
+        if ($response->successful()) {
+            $body = $response->json() ?? [];
+            if (isset($body['error'])) {
+                throw new \RuntimeException("Gmail Webhook error: " . $body['error']);
+            }
+            Log::info("Email sent via Gmail Webhook to {$to}");
+            return;
+        }
+
+        $error  = $response->body();
+        $status = $response->status();
+        Log::error("Gmail Webhook error [{$status}] for {$to}: {$error}");
+        throw new \RuntimeException("Gmail Webhook error ({$status}): {$error}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -98,6 +161,68 @@ class MailService
         $status = $response->status();
         Log::error("Brevo API error [{$status}] for {$to}: {$error}");
         throw new \RuntimeException("Brevo API error ({$status}): {$error}");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  MAILJET HTTP API TRANSPORT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Send email via Mailjet REST API (HTTPS — no SMTP ports needed).
+     * Only requires a verified SENDER EMAIL (no domain needed).
+     * Works immediately after signup — no account activation delay.
+     *
+     * @throws \RuntimeException on API error
+     */
+    private static function sendViaMailjet(
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        $apiKey      = config('services.mailjet.key');
+        $apiSecret   = config('services.mailjet.secret');
+        $fromAddress = config('mail.from.address');
+        $fromName    = config('mail.from.name', config('app.name', 'JOTIFY'));
+
+        $payload = [
+            'Messages' => [[
+                'From'     => ['Email' => $fromAddress, 'Name' => $fromName],
+                'To'       => [['Email' => $to, 'Name' => $toName ?: $to]],
+                'Subject'  => $subject,
+                'HTMLPart' => $htmlBody,
+                'TextPart' => $textBody,
+            ]],
+        ];
+
+        Log::debug('Mailjet API request', [
+            'to'      => $to,
+            'from'    => $fromAddress,
+            'subject' => $subject,
+        ]);
+
+        $response = Http::withBasicAuth($apiKey, $apiSecret)
+            ->timeout(15)
+            ->post('https://api.mailjet.com/v3.1/send', $payload);
+
+        if ($response->successful()) {
+            $messages = $response->json('Messages') ?? [];
+            $status   = $messages[0]['Status'] ?? 'unknown';
+            $msgId    = $messages[0]['To'][0]['MessageID'] ?? 'unknown';
+            Log::info("Email sent via Mailjet to {$to}, status: {$status}, id: {$msgId}");
+
+            if ($status === 'error') {
+                $errMsg = $messages[0]['Errors'][0]['ErrorMessage'] ?? 'Unknown Mailjet error';
+                throw new \RuntimeException("Mailjet delivery error: {$errMsg}");
+            }
+            return;
+        }
+
+        $error  = $response->json('ErrorMessage') ?? $response->body();
+        $status = $response->status();
+        Log::error("Mailjet API error [{$status}] for {$to}: {$error}");
+        throw new \RuntimeException("Mailjet API error ({$status}): {$error}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════

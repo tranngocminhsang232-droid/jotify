@@ -332,5 +332,106 @@ function previewFontSize(value) {
         }, 600);
     }
 }
+
+// ── Offline Preferences Support ──────────────────────────────────────────
+(function() {
+    const form = document.querySelector('.pref-card');
+    if (!form) return;
+
+    form.addEventListener('submit', async function(e) {
+        // If online, let the normal form POST proceed
+        if (navigator.onLine) return;
+
+        // Offline: prevent form submission, save to IDB instead
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const prefs = {
+            font_size:  formData.get('font_size')  || 'medium',
+            note_color: formData.get('note_color') || 'none',
+        };
+
+        try {
+            // Save to IDB for immediate local use
+            if (window.savePreferencesToIDB) {
+                await window.savePreferencesToIDB(prefs);
+            }
+
+            // Queue pending sync via localStorage
+            localStorage.setItem('jotify_pending_prefs', JSON.stringify(prefs));
+
+            // Show success toast
+            showOfflineToast('✅ Preferences saved locally. Will sync when online.');
+
+        } catch (err) {
+            console.warn('[Offline] Failed to save preferences:', err);
+            showOfflineToast('❌ Failed to save preferences offline.');
+        }
+    });
+
+    // Sync pending preferences when back online
+    window.addEventListener('online', async function() {
+        const pending = localStorage.getItem('jotify_pending_prefs');
+        if (!pending) return;
+
+        try {
+            const prefs = JSON.parse(pending);
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+            // Use form-urlencoded with _method=PUT (Laravel method spoofing)
+            const body = new URLSearchParams();
+            body.append('_method', 'PUT');
+            body.append('_token', csrfToken || '');
+            body.append('font_size', prefs.font_size);
+            body.append('note_color', prefs.note_color);
+
+            const res = await fetch('/preferences', {
+                method: 'POST', // POST with _method=PUT for Laravel
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            });
+
+            if (res.ok || res.redirected) {
+                localStorage.removeItem('jotify_pending_prefs');
+                console.log('[Offline] Preferences synced successfully');
+            }
+        } catch (err) {
+            console.warn('[Offline] Preferences sync failed:', err);
+        }
+    });
+
+    function showOfflineToast(msg) {
+        // Remove existing toast if any
+        document.querySelector('.offline-toast')?.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'offline-toast';
+        toast.textContent = msg;
+        toast.style.cssText = `
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+            background: var(--color-card, #1a1a2e); color: var(--color-body-text, #e0e0e0);
+            border: 1px solid var(--accent-dim, #22c55e); border-radius: 0.875rem;
+            padding: 0.875rem 1.5rem; font-size: 0.85rem; font-weight: 600;
+            z-index: 9999; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
+    }
+
+    // Add slide-up animation
+    if (!document.getElementById('offline-toast-style')) {
+        const style = document.createElement('style');
+        style.id = 'offline-toast-style';
+        style.textContent = `
+            @keyframes slideUp {
+                from { opacity: 0; transform: translateX(-50%) translateY(1rem); }
+                to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+})();
 </script>
 @endpush

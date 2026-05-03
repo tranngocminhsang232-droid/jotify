@@ -868,7 +868,7 @@
                     // This runs AFTER login (inside @@auth block), so the cookies are
                     // valid and the SW will get 200 responses (not 302->login).
                     @auth
-                    const warmPages = ['/notes', '/profile', '/profile/edit', '/offline-note.html'];
+                    const warmPages = ['/notes', '/profile', '/profile/edit', '/preferences', '/offline-note.html'];
                     function sendCacheMsg() {
                         if (navigator.serviceWorker.controller) {
                             console.log('[SW-Reg] Sending CACHE_PAGES:', warmPages);

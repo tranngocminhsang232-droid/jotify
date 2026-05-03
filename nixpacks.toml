@@ -11,8 +11,7 @@ cmds = [
 [phases.build]
 cmds = [
   "php artisan optimize:clear",
-  "php artisan event:cache",
-  "php artisan view:cache"
+  "php artisan event:cache"
 ]
 
 # ─── IMPORTANT NOTES ──────────────────────────────────────────────────────────
@@ -26,4 +25,4 @@ cmds = [
 # ──────────────────────────────────────────────────────────────────────────────
 
 [start]
-cmd = "php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link 2>/dev/null; php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+cmd = "php artisan config:cache && php artisan route:cache && php artisan view:clear && php artisan view:cache && php artisan migrate --force && php artisan storage:link 2>/dev/null; php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"

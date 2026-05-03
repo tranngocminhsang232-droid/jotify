@@ -865,8 +865,8 @@
                     reg.update(); // check for new version on each load
 
                     // Pre-warm auth pages + offline shells into SW cache.
-                    // This runs AFTER login (inside @auth), so the cookies are
-                    // valid and the SW will get 200 responses (not 302→login).
+                    // This runs AFTER login (inside @@auth block), so the cookies are
+                    // valid and the SW will get 200 responses (not 302->login).
                     @auth
                     const warmPages = ['/notes', '/profile', '/profile/edit', '/offline-note.html'];
                     function sendCacheMsg() {

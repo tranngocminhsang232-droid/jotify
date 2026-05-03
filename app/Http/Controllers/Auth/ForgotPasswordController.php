@@ -81,7 +81,7 @@ class ForgotPasswordController extends Controller
             return back()->withErrors(['otp' => 'OTP has expired. Please request a new one.']);
         }
 
-        return redirect('/reset-password/otp-verified?email=' . urlencode($request->email));
+        return redirect('/reset-password-otp?email=' . urlencode($request->email));
     }
 
     public function showResetFormAfterOtp(Request $request)

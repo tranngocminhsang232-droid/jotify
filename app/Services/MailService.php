@@ -11,9 +11,22 @@ use Illuminate\Support\Facades\Log;
 class MailService
 {
     // ─── TRANSPORT SELECTION ───────────────────────────────────────────────
-    // If RESEND_API_KEY is set → use Resend HTTP API (works on Railway/cloud)
-    // Otherwise → use PHPMailer SMTP (works on localhost/XAMPP)
+    // Priority: BREVO_API_KEY → RESEND_API_KEY → PHPMailer SMTP
+    //
+    // Brevo  = free 300 emails/day, verify sender EMAIL only (no domain needed)
+    // Resend = free 100 emails/day, requires domain verification
+    // SMTP   = works on localhost/XAMPP, blocked on Railway/cloud
     // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Detect which transport is active.
+     */
+    public static function activeTransport(): string
+    {
+        if (config('services.brevo.key'))  return 'brevo';
+        if (config('services.resend.key')) return 'resend';
+        return 'smtp';
+    }
 
     /**
      * Send an email using the best available transport.
@@ -27,13 +40,64 @@ class MailService
         string $htmlBody,
         string $textBody
     ): void {
-        $resendKey = config('services.resend.key');
+        $transport = self::activeTransport();
 
-        if ($resendKey) {
-            self::sendViaResend($resendKey, $to, $toName, $subject, $htmlBody, $textBody);
-        } else {
-            self::sendViaSmtp($to, $toName, $subject, $htmlBody, $textBody);
+        match ($transport) {
+            'brevo'  => self::sendViaBrevo($to, $toName, $subject, $htmlBody, $textBody),
+            'resend' => self::sendViaResend($to, $toName, $subject, $htmlBody, $textBody),
+            default  => self::sendViaSmtp($to, $toName, $subject, $htmlBody, $textBody),
+        };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  BREVO (Sendinblue) HTTP API TRANSPORT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Send email via Brevo REST API (HTTPS — no SMTP ports needed).
+     * Only requires a verified SENDER EMAIL (not a domain).
+     *
+     * @throws \RuntimeException on API error
+     */
+    private static function sendViaBrevo(
+        string $to,
+        string $toName,
+        string $subject,
+        string $htmlBody,
+        string $textBody
+    ): void {
+        $apiKey      = config('services.brevo.key');
+        $fromAddress = config('mail.from.address');
+        $fromName    = config('mail.from.name', config('app.name', 'JOTIFY'));
+
+        $payload = [
+            'sender'      => ['name' => $fromName, 'email' => $fromAddress],
+            'to'          => [['email' => $to, 'name' => $toName ?: $to]],
+            'subject'     => $subject,
+            'htmlContent' => $htmlBody,
+            'textContent' => $textBody,
+        ];
+
+        Log::debug('Brevo API request', [
+            'to'      => $to,
+            'from'    => $fromAddress,
+            'subject' => $subject,
+        ]);
+
+        $response = Http::withHeaders(['api-key' => $apiKey])
+            ->timeout(15)
+            ->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+        if ($response->successful()) {
+            $messageId = $response->json('messageId') ?? 'unknown';
+            Log::info("Email sent via Brevo to {$to}, messageId: {$messageId}");
+            return;
         }
+
+        $error  = $response->json('message') ?? $response->body();
+        $status = $response->status();
+        Log::error("Brevo API error [{$status}] for {$to}: {$error}");
+        throw new \RuntimeException("Brevo API error ({$status}): {$error}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -42,17 +106,18 @@ class MailService
 
     /**
      * Send email via Resend REST API (HTTPS — no SMTP ports needed).
+     * Requires domain verification for sending to non-account emails.
      *
      * @throws \RuntimeException on API error
      */
     private static function sendViaResend(
-        string $apiKey,
         string $to,
         string $toName,
         string $subject,
         string $htmlBody,
         string $textBody
     ): void {
+        $apiKey      = config('services.resend.key');
         $fromAddress = config('mail.from.address', 'onboarding@resend.dev');
         $fromName    = config('mail.from.name', config('app.name', 'JOTIFY'));
 
@@ -64,12 +129,6 @@ class MailService
             'text'    => $textBody,
         ];
 
-        Log::debug('Resend API request', [
-            'to'      => $to,
-            'from'    => $payload['from'],
-            'subject' => $subject,
-        ]);
-
         $response = Http::withToken($apiKey)
             ->timeout(15)
             ->post('https://api.resend.com/emails', $payload);
@@ -80,7 +139,7 @@ class MailService
             return;
         }
 
-        $error = $response->json('message') ?? $response->body();
+        $error  = $response->json('message') ?? $response->body();
         $status = $response->status();
         Log::error("Resend API error [{$status}] for {$to}: {$error}");
         throw new \RuntimeException("Resend API error ({$status}): {$error}");
@@ -113,7 +172,7 @@ class MailService
             $list = implode(', ', $missing);
             throw new \RuntimeException(
                 "Mail configuration incomplete — missing or default values for: {$list}. "
-                . "Set these environment variables or use RESEND_API_KEY for HTTP-based sending."
+                . "Set BREVO_API_KEY or RESEND_API_KEY for HTTP-based sending on cloud platforms."
             );
         }
     }

@@ -136,17 +136,20 @@ if (config('app.debug')) {
 
     // ─── MAIL DIAGNOSTIC (debug only) ──────────────────────────────────────
     Route::get('/debug/test-mail', function () {
+        $transport = \App\Services\MailService::activeTransport();
+        $brevoKey  = config('services.brevo.key');
         $resendKey = config('services.resend.key');
 
+        $transportLabels = [
+            'brevo'  => '🚀 Brevo HTTP API',
+            'resend' => '🚀 Resend HTTP API',
+            'smtp'   => '📧 PHPMailer SMTP',
+        ];
+
         $config = [
-            'ACTIVE_TRANSPORT'  => $resendKey ? '🚀 Resend HTTP API' : '📧 PHPMailer SMTP',
+            'ACTIVE_TRANSPORT'  => $transportLabels[$transport] ?? $transport,
+            'BREVO_API_KEY'     => $brevoKey  ? '✅ SET (' . substr($brevoKey, 0, 10) . '...)' : '❌ NOT SET',
             'RESEND_API_KEY'    => $resendKey ? '✅ SET (' . substr($resendKey, 0, 8) . '...)' : '❌ NOT SET',
-            'MAIL_MAILER'       => config('mail.default'),
-            'MAIL_HOST'         => config('mail.mailers.smtp.host'),
-            'MAIL_PORT'         => config('mail.mailers.smtp.port'),
-            'MAIL_SCHEME'       => config('mail.mailers.smtp.scheme'),
-            'MAIL_USERNAME'     => config('mail.mailers.smtp.username') ? '✅ SET' : '❌ MISSING',
-            'MAIL_PASSWORD'     => config('mail.mailers.smtp.password') ? '✅ SET' : '❌ MISSING',
             'MAIL_FROM_ADDRESS' => config('mail.from.address'),
             'MAIL_FROM_NAME'    => config('mail.from.name'),
             'APP_URL'           => config('app.url'),
@@ -171,14 +174,14 @@ if (config('app.debug')) {
 
                 $result['test_email'] = [
                     'status'    => '✅ SUCCESS',
-                    'transport' => $resendKey ? 'Resend' : 'SMTP',
+                    'transport' => $transport,
                     'sent_to'   => $sendTo,
                     'message'   => 'Email sent successfully! Check the inbox.',
                 ];
             } catch (\Exception $e) {
                 $result['test_email'] = [
                     'status'    => '❌ FAILED',
-                    'transport' => $resendKey ? 'Resend' : 'SMTP',
+                    'transport' => $transport,
                     'sent_to'   => $sendTo,
                     'error'     => $e->getMessage(),
                 ];

@@ -611,54 +611,69 @@
 var noteId = {{ $note->id }};
 var currentLabels = @json($note->labels->pluck('id'));
 
-// ─── Background IDB Sync: cache ALL notes for offline access ─────────────────
-// Runs in editor so user doesn't need to return to /notes list to populate cache.
-// Uses per-note upsert (NOT clear-all) to avoid overwriting fresh auto-save data.
+// ─── IDB-First Hydration: ALWAYS prefer IDB content over cached HTML ─────────
+// The SW may serve stale HTML with old content. IDB has the freshest data
+// from auto-save and background sync. Hydrate from IDB on every load.
+(async function hydrateFromIDB() {
+    if (!window.getNotesFromIDB) {
+        // app.js not ready yet — retry after short delay
+        setTimeout(hydrateFromIDB, 500);
+        return;
+    }
+
+    try {
+        // 1. Read current note from IDB
+        var allNotes = await window.getNotesFromIDB();
+        var idbNote = allNotes.find(function(n) { return n.id === noteId; });
+
+        // 2. If IDB has data, use it (fresher than cached HTML)
+        if (idbNote && (idbNote.title || idbNote.content)) {
+            var titleEl = document.getElementById('note-title');
+            var contentEl = document.getElementById('note-content');
+            if (titleEl && idbNote.title !== undefined) titleEl.value = idbNote.title;
+            if (contentEl && idbNote.content !== undefined) contentEl.value = idbNote.content;
+
+            // Show sync status if pending
+            if (idbNote.syncStatus === 'pending_update') {
+                var s = document.getElementById('save-status');
+                if (s) s.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500">cloud_upload</span> Offline edits — will sync when online';
+            }
+        }
+
+        // 3. Write current page content to IDB (ensures IDB is populated on first visit)
+        var t = document.getElementById('note-title');
+        var c = document.getElementById('note-content');
+        if (t && c && window.updateNoteInIDB) {
+            await window.updateNoteInIDB({
+                id:      noteId,
+                title:   t.value || '',
+                content: c.value || '',
+            });
+        }
+    } catch(e) {}
+})();
+
+// ─── Background IDB Sync: merge ALL notes from server for offline access ─────
+// Uses mergeServerNotesIntoIDB (non-destructive) instead of per-note upsert.
 (async function backgroundIDBSync() {
     if (!navigator.onLine) return;
-    if (!window.updateNoteInIDB) {
-        // app.js may not be ready yet — retry after short delay
+    if (!window.mergeServerNotesIntoIDB) {
         setTimeout(backgroundIDBSync, 800);
         return;
     }
     try {
-        const res = await fetch('/api/notes-offline-data', {
+        var res = await fetch('/api/notes-offline-data', {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         if (!res.ok) return;
-        const data = await res.json();
+        var data = await res.json();
         if (Array.isArray(data.notes)) {
-            for (const note of data.notes) {
-                await window.updateNoteInIDB(note);
-            }
+            await window.mergeServerNotesIntoIDB(data.notes);
         }
         if (Array.isArray(data.labels) && window.saveLabelsToIDB) {
             await window.saveLabelsToIDB(data.labels);
         }
     } catch(e) { /* silent — non-critical background task */ }
-})();
-
-// ─── Offline IDB hydration: restore latest local edits on load ───────────────
-// If offline and we have a queued update for this note, show local version.
-(async function() {
-    if (navigator.onLine) return;
-    if (!window.getPendingUpdates) return; // app.js not ready yet — retry below
-    function _hydrate() {
-        if (!window.getPendingUpdates) return;
-        window.getPendingUpdates().then(function(pending) {
-            var hit = pending.find(function(p) { return String(p.noteId) === String(noteId); });
-            if (!hit) return;
-            var t = document.getElementById('note-title');
-            var c = document.getElementById('note-content');
-            if (t && hit.title   !== undefined) t.value = hit.title;
-            if (c && hit.content !== undefined) c.value = hit.content;
-            var s = document.getElementById('save-status');
-            if (s) s.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500">cloud_upload</span> Offline — local edits loaded';
-        }).catch(function(){});
-    }
-    // Try immediately; if app.js not ready yet, retry after a short delay
-    if (window.getPendingUpdates) { _hydrate(); }
-    else { setTimeout(_hydrate, 600); }
 })();
 
 // ─── Fallback autosave (hoạt động độc lập với Alpine.js) ─────────────────────
@@ -685,14 +700,18 @@ var currentLabels = @json($note->labels->pluck('id'));
         .then(result => {
             if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-emerald-500">cloud_done</span> Saved ' + (result.updated_at || '');
             if (window._ajaxPrefetchCache) delete window._ajaxPrefetchCache['/notes'];
-            // Keep IDB fresh so offline always has latest title/content
-            if (window.updateNoteInIDB) window.updateNoteInIDB({ id: noteId, title: titleEl.value, content: contentEl.value });
+            // Keep IDB fresh so offline always has latest title/content (syncStatus = synced)
+            if (window.updateNoteInIDB) window.updateNoteInIDB({ id: noteId, title: titleEl.value, content: contentEl.value, syncStatus: 'synced' });
         })
         .catch(() => {
             if (!navigator.onLine && window.queueUpdate) {
                 var titleVal   = titleEl ? titleEl.value : '';
                 var contentVal = contentEl ? contentEl.value : '';
                 window.queueUpdate(noteId, { title: titleVal, content: contentVal });
+                // Also update IDB directly with syncStatus = pending_update
+                if (window.updateNoteInIDB) {
+                    window.updateNoteInIDB({ id: noteId, title: titleVal, content: contentVal, syncStatus: 'pending_update' });
+                }
                 if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500">cloud_upload</span> Saved offline';
             } else {
                 if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-red-500">cloud_off</span> Save failed';

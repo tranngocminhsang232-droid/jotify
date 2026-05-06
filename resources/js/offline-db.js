@@ -1,6 +1,11 @@
 /**
  * offline-db.js — JOTIFY IndexedDB wrapper (dùng idb library)
- * v2: Thêm offline queue, labels cache, preferences cache
+ * v3: Offline-first architecture
+ *   - IDB is the single source of truth for the UI
+ *   - Server is a sync target, not primary data source
+ *   - syncStatus on every note: 'synced' | 'pending_create' | 'pending_update'
+ *   - Never clear() the store — diff-based merge only
+ *   - Sync mutex prevents concurrent sync operations
  */
 import { openDB } from 'idb';
 
@@ -51,33 +56,88 @@ function getDB() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NOTES — read/write cached notes
+// NOTES — offline-first read/write with syncStatus tracking
+//
+// syncStatus values:
+//   'synced'         — note exists on server and IDB is up to date
+//   'pending_create' — note created offline, not yet on server
+//   'pending_update' — note has local edits not yet synced to server
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function saveNotesToIDB(notes) {
+/**
+ * Merge server notes into IDB — NEVER clears the store.
+ * Server data is authoritative for synced notes.
+ * Local-only notes (pending_create) are preserved.
+ * Notes with pending_update keep their local title/content.
+ *
+ * @param {Array} serverNotes — notes from the server API
+ */
+export async function mergeServerNotesIntoIDB(serverNotes) {
     try {
         const db = await getDB();
         const tx = db.transaction(STORE_NOTES, 'readwrite');
-        await tx.store.clear();
-        for (const note of notes) {
-            await tx.store.put({
-                id:           note.id,
-                title:        note.title        ?? '',
-                content:      note.content      ?? '',
-                note_color:   note.note_color   ?? '#ffffff',
-                is_pinned:    note.is_pinned    ?? false,
-                has_password: note.has_password ?? false,
-                note_password:note.note_password ?? null, // bcrypt hash for offline pw verification
-                is_shared:    note.is_shared    ?? false,
-                labels:       note.labels       ?? [],
-                updated_at:   note.updated_at   ?? '',
-                created_at_ts:note.created_at_ts ?? 0,
-            });
+
+        const serverIds = new Set(serverNotes.map(n => n.id));
+        const existingKeys = await tx.store.getAllKeys();
+
+        // 1. Remove notes deleted on server — but NEVER delete local-only notes
+        for (const key of existingKeys) {
+            if (!serverIds.has(key)) {
+                const existing = await tx.store.get(key);
+                // Only delete if it was synced (came from server originally)
+                if (existing && existing.syncStatus !== 'pending_create') {
+                    await tx.store.delete(key);
+                }
+            }
         }
+
+        // 2. Upsert server notes — but don't overwrite pending local edits
+        for (const note of serverNotes) {
+            const existing = await tx.store.get(note.id);
+
+            if (existing && existing.syncStatus === 'pending_update') {
+                // Keep local title/content (user edited offline), update metadata
+                await tx.store.put({
+                    ...existing,
+                    note_color:    note.note_color   ?? existing.note_color,
+                    is_pinned:     note.is_pinned    ?? existing.is_pinned,
+                    has_password:  note.has_password  ?? existing.has_password,
+                    note_password: note.note_password ?? existing.note_password,
+                    is_shared:     note.is_shared     ?? existing.is_shared,
+                    labels:        note.labels        ?? existing.labels,
+                    // syncStatus stays 'pending_update'
+                });
+            } else {
+                // Fresh write or update a synced note
+                await tx.store.put({
+                    id:            note.id,
+                    title:         note.title         ?? '',
+                    content:       note.content       ?? '',
+                    note_color:    note.note_color    ?? '#ffffff',
+                    is_pinned:     note.is_pinned     ?? false,
+                    has_password:  note.has_password   ?? false,
+                    note_password: note.note_password  ?? null,
+                    is_shared:     note.is_shared      ?? false,
+                    labels:        note.labels         ?? [],
+                    updated_at:    note.updated_at     ?? '',
+                    created_at_ts: note.created_at_ts  ?? 0,
+                    syncStatus:    'synced',
+                });
+            }
+        }
+
         await tx.done;
     } catch (e) {
-        console.warn('[IDB] saveNotesToIDB failed:', e);
+        console.warn('[IDB] mergeServerNotesIntoIDB failed:', e);
     }
+}
+
+/**
+ * Backward-compatible wrapper — callers that used saveNotesToIDB
+ * now get merge behavior instead of destructive clear.
+ */
+export async function saveNotesToIDB(notes) {
+    return mergeServerNotesIntoIDB(notes);
 }
 
 export async function getNotesFromIDB() {
@@ -109,6 +169,7 @@ export async function updateNoteInIDB(note) {
         const db = await getDB();
         const existing = await db.get(STORE_NOTES, note.id);
         // Upsert: merge with existing or create with defaults
+        // Preserve syncStatus unless explicitly provided
         await db.put(STORE_NOTES, {
             id:           note.id,
             title:        '',
@@ -121,6 +182,7 @@ export async function updateNoteInIDB(note) {
             labels:       [],
             updated_at:   '',
             created_at_ts:0,
+            syncStatus:   'synced',
             ...existing,   // override defaults with existing data
             ...note,       // override with new data
         });
@@ -139,8 +201,117 @@ export async function hasOfflineNotes() {
     }
 }
 
+/** Get count of notes with pending sync status */
+export async function getPendingSyncCount() {
+    try {
+        const db    = await getDB();
+        const notes = await db.getAll(STORE_NOTES);
+        return notes.filter(n =>
+            n.syncStatus === 'pending_create' || n.syncStatus === 'pending_update'
+        ).length;
+    } catch (e) {
+        return 0;
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SYNC ENGINE — mutex-protected sync of pending changes to server
+// ──────────────────────────────────────────────────────────────────────────────
+
+let _syncLock = false;
+
+/**
+ * Sync all pending changes (creates + updates) to the server.
+ * Protected by a mutex to prevent concurrent sync operations.
+ * @param {string} csrfToken — CSRF token for server requests
+ * @returns {{ created: number, updated: number, failed: number }}
+ */
+export async function syncAllPending(csrfToken) {
+    if (_syncLock) return { created: 0, updated: 0, failed: 0 };
+    _syncLock = true;
+    const result = { created: 0, updated: 0, failed: 0 };
+
+    try {
+        // ── Sync pending creates ──────────────────────────────────────────
+        const creates = await getPendingCreates();
+        for (const item of creates) {
+            try {
+                const res = await fetch('/notes', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                });
+                if (!res.ok) { result.failed++; continue; }
+
+                const data = await res.json().catch(() => ({}));
+                const newId = data.id;
+                if (newId) {
+                    // Push the offline content to the new server note
+                    await fetch(`/notes/${newId}/auto-save`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            title:   item.title   || '',
+                            content: item.content || '',
+                        }),
+                    });
+
+                    // Remove from pending_creates queue
+                    await removePendingCreate(item.tempId);
+                    // Remove the temp note from IDB notes store
+                    await deleteNoteFromIDB(item.tempId);
+                    result.created++;
+                }
+            } catch (e) {
+                result.failed++;
+            }
+        }
+
+        // ── Sync pending updates ──────────────────────────────────────────
+        const updates = await getPendingUpdates();
+        for (const item of updates) {
+            try {
+                const res = await fetch(`/notes/${item.noteId}/auto-save`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        title:   item.title   || '',
+                        content: item.content || '',
+                    }),
+                });
+                if (res.ok) {
+                    await removePendingUpdate(item.noteId);
+                    // Mark note as synced in IDB
+                    await updateNoteInIDB({
+                        id:         item.noteId,
+                        syncStatus: 'synced',
+                    });
+                    result.updated++;
+                } else {
+                    result.failed++;
+                }
+            } catch (e) {
+                result.failed++;
+            }
+        }
+    } finally {
+        _syncLock = false;
+    }
+
+    return result;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // OFFLINE QUEUE — pending_creates & pending_updates
+// (kept for backward compat; syncAllPending reads from these stores)
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -154,17 +325,18 @@ export async function queueCreate(tempId, data) {
         await db.put(STORE_CREATES, { tempId, ...data, queued_at: Date.now() });
         // Also add to notes cache so UI shows it immediately
         await db.put(STORE_NOTES, {
-            id:           tempId,
-            title:        data.title        ?? '',
-            content:      data.content      ?? '',
-            note_color:   data.note_color   ?? '#ffffff',
-            is_pinned:    false,
-            has_password: false,
-            is_shared:    false,
-            labels:       data.labels       ?? [],
-            updated_at:   'Just now',
+            id:            tempId,
+            title:         data.title        ?? '',
+            content:       data.content      ?? '',
+            note_color:    data.note_color   ?? '#ffffff',
+            is_pinned:     false,
+            has_password:  false,
+            is_shared:     false,
+            labels:        data.labels       ?? [],
+            updated_at:    'Just now',
             created_at_ts: data.created_at_ts ?? Math.floor(Date.now() / 1000),
-            _pending:     true,   // flag để UI hiện "Pending sync"
+            syncStatus:    'pending_create',
+            _pending:      true,
         });
     } catch (e) {
         console.warn('[IDB] queueCreate failed:', e);
@@ -181,15 +353,16 @@ export async function queueUpdate(noteId, data) {
         const db = await getDB();
         // Overwrite any existing queued update for this note (latest wins)
         await db.put(STORE_UPDATES, { noteId, ...data, queued_at: Date.now() });
-        // Keep local cache fresh
+        // Keep local cache fresh + mark as pending
         const existing = await db.get(STORE_NOTES, noteId);
         if (existing) {
             await db.put(STORE_NOTES, {
                 ...existing,
-                title:   data.title   ?? existing.title,
-                content: data.content ?? existing.content,
+                title:      data.title   ?? existing.title,
+                content:    data.content ?? existing.content,
                 updated_at: 'Pending sync…',
-                _pending: true,
+                syncStatus: 'pending_update',
+                _pending:   true,
             });
         }
     } catch (e) {

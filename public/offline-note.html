@@ -231,8 +231,30 @@ async function openDB() {
         const req = indexedDB.open('jotify-offline', 3);
         req.onsuccess = () => res(req.result);
         req.onerror   = () => rej(req.error);
-        // If the DB doesn't exist yet we get an upgrade — just open it
-        req.onupgradeneeded = () => {};
+        // If the DB doesn't exist yet, create all stores matching offline-db.js
+        req.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('notes')) {
+                const store = db.createObjectStore('notes', { keyPath: 'id' });
+                store.createIndex('is_pinned', 'is_pinned', { unique: false });
+                store.createIndex('updated_at', 'updated_at', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('pending_creates')) {
+                db.createObjectStore('pending_creates', { keyPath: 'tempId' });
+            }
+            if (!db.objectStoreNames.contains('pending_updates')) {
+                db.createObjectStore('pending_updates', { keyPath: 'noteId' });
+            }
+            if (!db.objectStoreNames.contains('labels')) {
+                db.createObjectStore('labels', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('preferences')) {
+                db.createObjectStore('preferences', { keyPath: 'key' });
+            }
+            if (!db.objectStoreNames.contains('profile')) {
+                db.createObjectStore('profile', { keyPath: 'key' });
+            }
+        };
     });
 }
 async function getNoteFromIDB(id) {
@@ -250,7 +272,7 @@ async function queueUpdateIDB(noteId, data) {
     if (!db.objectStoreNames.contains('pending_updates')) return;
     const tx = db.transaction(['pending_updates', 'notes'], 'readwrite');
     tx.objectStore('pending_updates').put({ noteId, ...data, queued_at: Date.now() });
-    // Keep notes cache fresh
+    // Keep notes cache fresh + mark as pending
     const existing = await new Promise(r => {
         const req = tx.objectStore('notes').get(noteId);
         req.onsuccess = () => r(req.result ?? null);
@@ -258,10 +280,11 @@ async function queueUpdateIDB(noteId, data) {
     if (existing) {
         tx.objectStore('notes').put({
             ...existing,
-            title:   data.title   ?? existing.title,
-            content: data.content ?? existing.content,
+            title:      data.title   ?? existing.title,
+            content:    data.content ?? existing.content,
             updated_at: 'Pending sync…',
-            _pending: true,
+            syncStatus: 'pending_update',
+            _pending:   true,
         });
     }
     return new Promise((res, rej) => {

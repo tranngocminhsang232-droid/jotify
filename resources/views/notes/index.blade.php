@@ -1410,10 +1410,11 @@
         window.requirePassword({{ session('password_required') }}, 'edit');
     @endif
 
-    // ─── IndexedDB Offline Sync ───────────────────────────────────────────────
-    // Online: lưu notes + labels + prefs vào IDB
-    // Offline: load từ IDB, hỗ trợ tạo note, search, filter label
-    (async function initOfflineSync() {
+    // ─── Offline-First Architecture ─────────────────────────────────────────────
+    // IDB is the single source of truth for the UI.
+    // Server is a sync target, not primary data source.
+    // Flow: render IDB → sync pending → fetch server → merge → re-render
+    (async function loadNotesOfflineFirst() {
         @php
         $notesOfflineData = $notes->map(function($n) {
             return [
@@ -1433,14 +1434,36 @@
         $labelsOfflineData = $labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values();
         $prefsOfflineData  = ['font_size' => $preferences->font_size, 'note_color' => $preferences->note_color, 'theme' => $preferences->theme, 'view_mode' => $preferences->view_mode];
         @endphp
-        const notesData  = @json($notesOfflineData);
-        const labelsData = @json($labelsOfflineData);
-        const prefsData  = @json($prefsOfflineData);
+        const serverNotesData = @json($notesOfflineData);
+        const labelsData      = @json($labelsOfflineData);
+        const prefsData       = @json($prefsOfflineData);
 
+        // ── STEP 1: Render from IDB immediately (no waiting for network) ─────
+        let idbNotes = [];
+        if (window.getNotesFromIDB) {
+            try { idbNotes = await window.getNotesFromIDB(); } catch(e) {}
+        }
+        if (idbNotes.length > 0) {
+            // IDB has data → render it now (supersedes stale Blade HTML)
+            window.renderNotes && window.renderNotes(idbNotes);
+        }
+        // If IDB was empty, the server-rendered Blade cards are already visible.
+
+        // ── STEP 2: Online → sync pending + merge fresh data ─────────────────
         if (navigator.onLine) {
-            // ── Online: sync everything to IDB ──────────────────────────────
-            if (window.saveNotesToIDB) {
-                try { await window.saveNotesToIDB(notesData); } catch(e) {}
+            // 2a. Sync any pending offline changes to server first
+            if (window.syncAllPending) {
+                try {
+                    const syncResult = await window.syncAllPending(window.csrfToken);
+                    if (syncResult.created > 0 || syncResult.updated > 0) {
+                        console.log('[Offline-First] Synced:', syncResult);
+                    }
+                } catch(e) {}
+            }
+
+            // 2b. Merge server data into IDB (non-destructive, preserves local-only notes)
+            if (window.mergeServerNotesIntoIDB) {
+                try { await window.mergeServerNotesIntoIDB(serverNotesData); } catch(e) {}
             }
             if (window.saveLabelsToIDB) {
                 try { await window.saveLabelsToIDB(labelsData); } catch(e) {}
@@ -1449,86 +1472,26 @@
                 try { await window.savePreferencesToIDB(prefsData); } catch(e) {}
             }
 
-            // ── Sync pending creates (notes created while offline) ───────────
-            if (window.getPendingCreates) {
-                try {
-                    const pendingCreates = await window.getPendingCreates();
-                    for (const item of pendingCreates) {
-                        try {
-                            const res = await fetch('/notes', {
-                                method: 'POST',
-                                headers: { 'X-CSRF-TOKEN': window.csrfToken, 'Accept': 'application/json' },
-                            });
-                            if (res.ok) {
-                                // Get the new note ID from redirect or response
-                                const data = await res.json().catch(() => ({}));
-                                const newId = data.id;
-                                if (newId) {
-                                    // Auto-save the content to the new note
-                                    await fetch(`/notes/${newId}/auto-save`, {
-                                        method: 'PUT',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'X-CSRF-TOKEN': window.csrfToken,
-                                        },
-                                        body: JSON.stringify({ title: item.title, content: item.content }),
-                                    });
-                                }
-                                await window.removePendingCreate(item.tempId);
-                            }
-                        } catch(e) { /* silent — retry next time */ }
-                    }
-                } catch(e) {}
-            }
-
-            // ── Sync pending updates (edits made while offline) ───────────────
-            if (window.getPendingUpdates) {
-                try {
-                    const pendingUpdates = await window.getPendingUpdates();
-                    for (const item of pendingUpdates) {
-                        try {
-                            const res = await fetch(`/notes/${item.noteId}/auto-save`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': window.csrfToken,
-                                },
-                                body: JSON.stringify({ title: item.title, content: item.content }),
-                            });
-                            if (res.ok) {
-                                await window.removePendingUpdate(item.noteId);
-                            }
-                        } catch(e) { /* silent */ }
-                    }
-                } catch(e) {}
-            }
-
-        } else {
-            // ── Offline: load từ IDB, render, enable offline features ─────────
-            let offlineNotes = [];
-            let offlineLabels = [];
-
+            // 2c. Re-render from updated IDB (now has merged server + local data)
             if (window.getNotesFromIDB) {
-                try { offlineNotes = await window.getNotesFromIDB(); } catch(e) {}
+                try {
+                    const freshNotes = await window.getNotesFromIDB();
+                    if (freshNotes.length > 0) {
+                        window.renderNotes && window.renderNotes(freshNotes);
+                    }
+                } catch(e) {}
             }
+        } else {
+            // ── STEP 3: Offline → show banner, enable offline features ─────────
+            let offlineLabels = [];
             if (window.getLabelsFromIDB) {
                 try { offlineLabels = await window.getLabelsFromIDB(); } catch(e) {}
             }
 
-            // Always prefer IDB data when offline — the server-rendered `notesData`
-            // in the cached HTML page is STALE (from the last online visit).
-            // IDB data is kept up-to-date by auto-save + background sync.
-            if (offlineNotes.length > 0) {
-                window.renderNotes && window.renderNotes(offlineNotes);
-            }
-
             // Count pending items for banner
             let pendingCount = 0;
-            if (window.getPendingCreates) {
-                try { pendingCount += (await window.getPendingCreates()).length; } catch(e) {}
-            }
-            if (window.getPendingUpdates) {
-                try { pendingCount += (await window.getPendingUpdates()).length; } catch(e) {}
+            if (window.getPendingSyncCount) {
+                try { pendingCount = await window.getPendingSyncCount(); } catch(e) {}
             }
 
             // ── Offline banner ────────────────────────────────────────────────
@@ -1543,7 +1506,6 @@
             if (offlineLabels.length > 0) {
                 const chipsEl = document.getElementById('label-chips');
                 if (!chipsEl) {
-                    // Dynamically create label chips for offline use
                     const chipsWrap = document.createElement('div');
                     chipsWrap.className = 'flex flex-wrap gap-2 mb-6';
                     chipsWrap.id = 'label-chips';
@@ -1567,15 +1529,13 @@
             // ── Offline search: filter notes from IDB cache client-side ─────
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
-                // Remove the existing server-search handler
                 if (searchInput._notesHandler) {
                     searchInput.removeEventListener('input', searchInput._notesHandler);
                 }
                 searchInput._notesHandler = function() {
                     const q = this.value.trim().toLowerCase();
                     const activeLabelId = window._offlineActiveLabelId || '';
-                    const allNotes = offlineNotes;
-                    let filtered = allNotes;
+                    let filtered = idbNotes;
                     if (q) {
                         filtered = filtered.filter(n =>
                             (n.title || '').toLowerCase().includes(q) ||
@@ -1600,7 +1560,6 @@
                 const labelId = chip.dataset.labelId || '';
                 window._offlineActiveLabelId = labelId;
 
-                // Update chip active styles
                 document.querySelectorAll('.label-chip').forEach(c => {
                     c.classList.remove('bg-[#16a34a]', 'text-white', 'shadow-md');
                     c.classList.add('bg-hover', 'text-muted', 'border', 'border-border');
@@ -1609,8 +1568,7 @@
                 chip.classList.remove('bg-hover', 'text-muted', 'border', 'border-border');
                 chip.classList.add('bg-[#16a34a]', 'text-white');
 
-                // Apply filter from cache
-                let filtered = offlineNotes;
+                let filtered = idbNotes;
                 const searchQ = document.getElementById('search-input')?.value?.trim().toLowerCase() || '';
                 if (searchQ) {
                     filtered = filtered.filter(n =>
@@ -1625,48 +1583,41 @@
                 }
                 window.renderNotes && window.renderNotes(filtered);
             });
-
-            // ── Offline "New Note" — queue in IDB, show in UI immediately ─────
-            const newNoteForm = document.getElementById('new-note-form');
-            if (newNoteForm) {
-                newNoteForm.addEventListener('submit', async function offlineNewNote(e) {
-                    e.preventDefault();
-                    if (!window.queueCreate) return;
-
-                    const tempId = 'temp_' + Date.now();
-                    const newNote = {
-                        title:        '',
-                        content:      '',
-                        note_color:   'none',
-                        labels:       [],
-                        created_at_ts: Math.floor(Date.now() / 1000),
-                    };
-
-                    await window.queueCreate(tempId, newNote);
-
-                    // Show in UI immediately
-                    offlineNotes.unshift({ id: tempId, ...newNote, is_pinned: false, has_password: false, is_shared: false, updated_at: 'Just now', _pending: true });
-                    window.renderNotes && window.renderNotes(offlineNotes);
-
-                    // Update banner
-                    pendingCount++;
-                    const bannerEl = document.getElementById('offline-banner');
-                    if (bannerEl) {
-                        bannerEl.innerHTML = `<span class="material-icons-outlined" style="font-size:16px;">wifi_off</span>
-                            Offline — ${pendingCount} change${pendingCount > 1 ? 's' : ''} pending sync`;
-                    }
-
-                    showToast('Note saved offline — will sync when back online', 'warning');
-                }, { once: false });
-            }
         }
 
-        // ── Khi có mạng lại → reload để sync pending queue lên server ───────
+        // ── Offline "New Note" — always works, online or offline ──────────────
+        window.openOfflineNewNote = async function() {
+            if (!window.queueCreate) return;
+
+            const tempId = 'temp_' + Date.now();
+            const newNote = {
+                title:         '',
+                content:       '',
+                note_color:    'none',
+                labels:        [],
+                created_at_ts: Math.floor(Date.now() / 1000),
+            };
+
+            await window.queueCreate(tempId, newNote);
+
+            // Re-render from IDB to show the new note
+            if (window.getNotesFromIDB) {
+                const refreshed = await window.getNotesFromIDB();
+                window.renderNotes && window.renderNotes(refreshed);
+            }
+
+            showToast('Note saved offline — will sync when back online', 'warning');
+        };
+
+        // ── Reconnect handler: sync + reload ─────────────────────────────────
         window.addEventListener('online', async () => {
             showToast('Back online — syncing changes...', 'info');
-            // Remove offline banner
             document.getElementById('offline-banner')?.remove();
-            setTimeout(() => location.reload(), 1500);
+            // Sync pending then reload to get fresh server data
+            if (window.syncAllPending) {
+                try { await window.syncAllPending(window.csrfToken); } catch(e) {}
+            }
+            setTimeout(() => location.reload(), 1200);
         });
         window.addEventListener('offline', () => {
             showToast('You are offline — changes will be saved locally', 'error');

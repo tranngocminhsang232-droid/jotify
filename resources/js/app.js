@@ -4,10 +4,12 @@ import persist from '@alpinejs/persist';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import {
-    saveNotesToIDB, getNotesFromIDB, deleteNoteFromIDB, updateNoteInIDB, hasOfflineNotes,
+    saveNotesToIDB, mergeServerNotesIntoIDB,
+    getNotesFromIDB, deleteNoteFromIDB, updateNoteInIDB, hasOfflineNotes,
     queueCreate, queueUpdate,
     getPendingCreates, getPendingUpdates,
     removePendingCreate, removePendingUpdate,
+    syncAllPending, getPendingSyncCount,
     saveLabelsToIDB, getLabelsFromIDB,
     savePreferencesToIDB, getPreferencesFromIDB,
     saveProfileToIDB, getProfileFromIDB,
@@ -47,24 +49,27 @@ if (navigator.onLine && import.meta.env.VITE_PUSHER_APP_KEY) {
 /* ══════════════════════════════════════════════════════════════
    OFFLINE / IndexedDB — expose globally for Blade scripts
    ══════════════════════════════════════════════════════════════ */
-window.saveNotesToIDB    = saveNotesToIDB;
-window.getNotesFromIDB   = getNotesFromIDB;
-window.deleteNoteFromIDB = deleteNoteFromIDB;
-window.updateNoteInIDB   = updateNoteInIDB;
-window.hasOfflineNotes   = hasOfflineNotes;
-window.queueCreate           = queueCreate;
-window.queueUpdate           = queueUpdate;
-window.getPendingCreates     = getPendingCreates;
-window.getPendingUpdates     = getPendingUpdates;
-window.removePendingCreate   = removePendingCreate;
-window.removePendingUpdate   = removePendingUpdate;
-window.saveLabelsToIDB       = saveLabelsToIDB;
-window.getLabelsFromIDB      = getLabelsFromIDB;
-window.savePreferencesToIDB  = savePreferencesToIDB;
-window.getPreferencesFromIDB = getPreferencesFromIDB;
+window.saveNotesToIDB         = saveNotesToIDB;
+window.mergeServerNotesIntoIDB = mergeServerNotesIntoIDB;
+window.getNotesFromIDB        = getNotesFromIDB;
+window.deleteNoteFromIDB      = deleteNoteFromIDB;
+window.updateNoteInIDB        = updateNoteInIDB;
+window.hasOfflineNotes        = hasOfflineNotes;
+window.queueCreate            = queueCreate;
+window.queueUpdate            = queueUpdate;
+window.getPendingCreates      = getPendingCreates;
+window.getPendingUpdates      = getPendingUpdates;
+window.removePendingCreate    = removePendingCreate;
+window.removePendingUpdate    = removePendingUpdate;
+window.syncAllPending         = syncAllPending;
+window.getPendingSyncCount    = getPendingSyncCount;
+window.saveLabelsToIDB        = saveLabelsToIDB;
+window.getLabelsFromIDB       = getLabelsFromIDB;
+window.savePreferencesToIDB   = savePreferencesToIDB;
+window.getPreferencesFromIDB  = getPreferencesFromIDB;
 // Profile offline helpers
-window.saveProfileToIDB  = saveProfileToIDB;
-window.getProfileFromIDB = getProfileFromIDB;
+window.saveProfileToIDB   = saveProfileToIDB;
+window.getProfileFromIDB  = getProfileFromIDB;
 window.queueProfileUpdate = queueProfileUpdate;
 window.getProfileQueue    = getProfileQueue;
 window.clearProfileQueue  = clearProfileQueue;

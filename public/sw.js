@@ -16,8 +16,8 @@
  * ──────────────────────────────────────────────────────────
  */
 
-const CACHE_VER   = 'jotify-v18';
-const ASSET_CACHE = 'jotify-assets-v18';
+const CACHE_VER   = 'jotify-v19';
+const ASSET_CACHE = 'jotify-assets-v19';
 
 // ── Only pre-cache static files that DON'T require authentication ────────────
 // Auth routes (/notes, /profile) would 302 → /login during install,
@@ -220,11 +220,12 @@ async function networkFirst(req) {
     } catch {
         // ── Offline fallback logic ───────────────────────────────────────
 
-        // Note editor routes → always serve the IDB-backed offline shell
-        // (avoids serving stale cached HTML with wrong title/content)
-        if (req.mode === 'navigate' && /^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
+        // Note editor routes → ALWAYS serve the IDB-backed offline shell
+        // regardless of request mode (navigate OR AJAX fetch).
+        // This prevents stale cached HTML from showing empty note content.
+        if (/^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
             const shell = await caches.match(fullUrl('/offline-note.html'));
-            if (shell) return shell;
+            if (shell) return shell.clone();
         }
 
         // Try to find this exact URL in cache

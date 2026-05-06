@@ -842,6 +842,13 @@
             const href = link.getAttribute('href');
             if (link.target === '_blank' || link.hasAttribute('download')
                 || ('noTransition' in link.dataset) || skipAjax(href, e)) return;
+            // When offline + navigating to note editor → use direct navigation
+            // so the SW can serve offline-note.html (which is a standalone shell,
+            // not a Blade layout that AJAX nav can parse)
+            if (!navigator.onLine && /^\/notes\/\d+(\/edit)?$/.test(href)) {
+                window.location.href = href;
+                return;
+            }
             e.preventDefault();
             navigateTo(href);
         }, false);

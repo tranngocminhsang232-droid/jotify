@@ -230,7 +230,14 @@ async function openDB() {
     return new Promise((res, rej) => {
         const req = indexedDB.open('jotify-offline', 3);
         req.onsuccess = () => res(req.result);
-        req.onerror   = () => rej(req.error);
+        req.onerror   = () => {
+            console.error('[offline-note] IDB open error:', req.error);
+            rej(req.error);
+        };
+        req.onblocked = () => {
+            console.warn('[offline-note] IDB open blocked — another tab may have it open');
+            // Still resolve if unblocked eventually
+        };
         // If the DB doesn't exist yet, create all stores matching offline-db.js
         req.onupgradeneeded = (event) => {
             const db = event.target.result;
@@ -257,16 +264,65 @@ async function openDB() {
         };
     });
 }
+
+/**
+ * Get a note from IDB — robust version with multiple fallbacks.
+ * Handles key type mismatch (number vs string) and falls back to getAll.
+ */
 async function getNoteFromIDB(id) {
-    const db = await openDB();
-    if (!db.objectStoreNames.contains('notes')) return null;
-    return new Promise((res, rej) => {
-        const tx = db.transaction('notes', 'readonly');
-        const req = tx.objectStore('notes').get(id);
-        req.onsuccess = () => res(req.result ?? null);
-        req.onerror   = () => rej(req.error);
-    });
+    let db;
+    try {
+        db = await openDB();
+    } catch(e) {
+        console.error('[offline-note] Cannot open IDB:', e);
+        return null;
+    }
+
+    if (!db.objectStoreNames.contains('notes')) {
+        console.warn('[offline-note] "notes" store does not exist');
+        return null;
+    }
+
+    // Strategy 1: Direct get with numeric ID
+    try {
+        const tx1 = db.transaction('notes', 'readonly');
+        const result = await new Promise((res) => {
+            const req = tx1.objectStore('notes').get(id);
+            req.onsuccess = () => res(req.result ?? null);
+            req.onerror   = () => res(null);
+        });
+        if (result) return result;
+    } catch(e) {}
+
+    // Strategy 2: Direct get with string ID (in case key was stored as string)
+    try {
+        const tx2 = db.transaction('notes', 'readonly');
+        const result = await new Promise((res) => {
+            const req = tx2.objectStore('notes').get(String(id));
+            req.onsuccess = () => res(req.result ?? null);
+            req.onerror   = () => res(null);
+        });
+        if (result) return result;
+    } catch(e) {}
+
+    // Strategy 3: Fallback — getAll and find by loose equality
+    try {
+        const tx3 = db.transaction('notes', 'readonly');
+        const allNotes = await new Promise((res) => {
+            const req = tx3.objectStore('notes').getAll();
+            req.onsuccess = () => res(req.result ?? []);
+            req.onerror   = () => res([]);
+        });
+        console.log('[offline-note] getAll fallback: found', allNotes.length, 'notes, looking for id=', id);
+        const found = allNotes.find(n => String(n.id) === String(id));
+        if (found) return found;
+    } catch(e) {
+        console.error('[offline-note] getAll fallback failed:', e);
+    }
+
+    return null;
 }
+
 async function queueUpdateIDB(noteId, data) {
     const db = await openDB();
     if (!db.objectStoreNames.contains('pending_updates')) return;
@@ -316,7 +372,11 @@ async function init() {
     document.title = `Note #${noteId} — Offline (JOTIFY)`;
 
     let note = null;
-    try { note = await getNoteFromIDB(noteId); } catch(e) {}
+    try {
+        note = await getNoteFromIDB(noteId);
+    } catch(e) {
+        console.error('[offline-note] init: getNoteFromIDB failed:', e);
+    }
 
     if (!note) {
         document.getElementById('note-not-found').style.display = 'flex';

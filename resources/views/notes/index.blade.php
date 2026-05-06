@@ -1212,7 +1212,9 @@
             window.closePasswordModal();
             if (action === 'edit') {
                 const url = `/notes/${noteId}/edit`;
-                if (window.ajaxNav) window.ajaxNav(url); else location.href = url;
+                if (!navigator.onLine) location.href = url;
+                else if (window.ajaxNav) window.ajaxNav(url);
+                else location.href = url;
             } else if (action === 'delete') {
                 window.showDeleteModal(noteId);
             }
@@ -1304,9 +1306,17 @@
             target.style.transform  = 'scale(0.97)';
             target.style.opacity    = '0.7';
         }
+        const editUrl = '/notes/'+noteId+'/edit';
         setTimeout(() => {
-            if (window.ajaxNav) window.ajaxNav('/notes/'+noteId+'/edit');
-            else location.href = '/notes/'+noteId+'/edit';
+            // When offline, use direct navigation so the SW can serve offline-note.html
+            // (ajaxNav would try to parse it as a Blade layout and fail)
+            if (!navigator.onLine) {
+                location.href = editUrl;
+            } else if (window.ajaxNav) {
+                window.ajaxNav(editUrl);
+            } else {
+                location.href = editUrl;
+            }
         }, 100);
     };
 

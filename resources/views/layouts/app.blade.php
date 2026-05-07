@@ -842,11 +842,13 @@
             const href = link.getAttribute('href');
             if (link.target === '_blank' || link.hasAttribute('download')
                 || ('noTransition' in link.dataset) || skipAjax(href, e)) return;
-            // When offline + navigating to note editor → use direct navigation
-            // so the SW can serve offline-note.html (which is a standalone shell,
-            // not a Blade layout that AJAX nav can parse)
-            if (!navigator.onLine && /^\/notes\/\d+(\/edit)?$/.test(href)) {
-                window.location.href = href;
+            // When offline + navigating to note editor → use offline router
+            // (renders from IDB inside the current app shell, no page reload)
+            if (!navigator.onLine && /^\/notes\/([a-z0-9_]+)(\/edit)?$/i.test(href)) {
+                e.preventDefault();
+                const noteId = href.match(/\/notes\/([a-z0-9_]+)/i)[1];
+                const id = /^\d+$/.test(noteId) ? parseInt(noteId, 10) : noteId;
+                if (window.offlineRouter) window.offlineRouter.navigateToNote(id);
                 return;
             }
             e.preventDefault();
@@ -855,6 +857,14 @@
 
         // Back/Forward
         window.addEventListener('popstate', e => {
+            // When offline, delegate to the offline router for /notes routes
+            if (!navigator.onLine && window.offlineRouter) {
+                const path = location.pathname;
+                if (/^\/notes(\/.*)?$/.test(path)) {
+                    window.offlineRouter.handleRoute();
+                    return;
+                }
+            }
             if (e.state?.href) navigateTo(e.state.href);
             else navigateTo(location.href);
         });
@@ -867,6 +877,9 @@
         window.ajaxNav = navigateTo;
         // Expose prefetch cache so pages can invalidate stale prefetched content
         window._ajaxPrefetchCache = _prefetch;
+
+        // Expose CSRF token globally for the offline sync engine
+        window.csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     })();
     </script>
     @stack('scripts')
@@ -895,7 +908,7 @@
                     // This runs AFTER login (inside @@auth block), so the cookies are
                     // valid and the SW will get 200 responses (not 302->login).
                     @auth
-                    const warmPages = ['/notes', '/profile', '/profile/edit', '/preferences', '/offline-note.html'];
+                    const warmPages = ['/notes', '/profile', '/profile/edit', '/preferences'];
                     function sendCacheMsg() {
                         if (navigator.serviceWorker.controller) {
                             console.log('[SW-Reg] Sending CACHE_PAGES:', warmPages);

@@ -96,6 +96,19 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
             const existing = await tx.store.get(note.id);
 
             if (existing && existing.syncStatus === 'pending_update') {
+                // ── Conflict detection (last-write-wins) ─────────────────
+                // Compare server updated_at with local _localEditedAt.
+                // Local edits always win for pending notes, but we log the conflict.
+                const serverTime = note.updated_at_raw
+                    ? new Date(note.updated_at_raw).getTime()
+                    : (note.created_at_ts ? note.created_at_ts * 1000 : 0);
+                const localTime = existing._localEditedAt || 0;
+                if (serverTime > localTime && localTime > 0) {
+                    console.warn('[IDB] Conflict detected for note:', note.id,
+                        '— server is newer but keeping local edits.',
+                        'Server:', new Date(serverTime).toISOString(),
+                        'Local:', new Date(localTime).toISOString());
+                }
                 // Keep local title/content (user edited offline), update metadata
                 await tx.store.put({
                     ...existing,
@@ -155,6 +168,11 @@ export async function getNotesFromIDB() {
     }
 }
 
+/** Alias for getNotesFromIDB — semantic name for the offline-first architecture */
+export async function getAllNotes() {
+    return getNotesFromIDB();
+}
+
 export async function deleteNoteFromIDB(id) {
     try {
         const db = await getDB();
@@ -198,6 +216,116 @@ export async function hasOfflineNotes() {
         return count > 0;
     } catch (e) {
         return false;
+    }
+}
+
+/**
+ * Get a single note by ID — robust lookup with type fallback.
+ * Tries numeric key, then string key, then getAll + filter.
+ * @param {number|string} id
+ * @returns {object|null}
+ */
+export async function getNoteById(id) {
+    try {
+        const db = await getDB();
+        // Strategy 1: direct lookup (number)
+        let note = await db.get(STORE_NOTES, typeof id === 'string' ? id : Number(id));
+        if (note) return note;
+        // Strategy 2: try opposite type
+        note = await db.get(STORE_NOTES, String(id));
+        if (note) return note;
+        // Strategy 3: fallback to getAll + find
+        const all = await db.getAll(STORE_NOTES);
+        return all.find(n => String(n.id) === String(id)) || null;
+    } catch (e) {
+        console.warn('[IDB] getNoteById failed:', e);
+        return null;
+    }
+}
+
+/**
+ * Create a note offline-first.
+ * Generates a tempId, saves to IDB immediately, queues for sync.
+ * @param {{ title?: string, content?: string }} data
+ * @returns {{ tempId: string, note: object }}
+ */
+export async function createNoteOfflineFirst(data = {}) {
+    const tempId = 'temp_' + Date.now();
+    const note = {
+        id:            tempId,
+        title:         data.title   || '',
+        content:       data.content || '',
+        note_color:    'none',
+        is_pinned:     false,
+        has_password:  false,
+        note_password: null,
+        is_shared:     false,
+        labels:        [],
+        updated_at:    'Just now',
+        created_at_ts: Math.floor(Date.now() / 1000),
+        syncStatus:    'pending_create',
+        _pending:      true,
+    };
+    try {
+        const db = await getDB();
+        await db.put(STORE_NOTES, note);
+        // Also queue in pending_creates for syncAllPending
+        await db.put(STORE_CREATES, {
+            tempId,
+            title:         note.title,
+            content:       note.content,
+            created_at_ts: note.created_at_ts,
+            queued_at:     Date.now(),
+        });
+    } catch (e) {
+        console.warn('[IDB] createNoteOfflineFirst failed:', e);
+    }
+    return { tempId, note };
+}
+
+/**
+ * Update a note offline-first.
+ * Saves to IDB immediately, queues sync if offline.
+ * @param {number|string} noteId
+ * @param {{ title?: string, content?: string }} data
+ */
+export async function updateNoteOfflineFirst(noteId, data) {
+    try {
+        const db = await getDB();
+        const existing = await db.get(STORE_NOTES, noteId) ||
+                         await db.get(STORE_NOTES, String(noteId));
+        if (!existing) {
+            // Note not in IDB — create it
+            await db.put(STORE_NOTES, {
+                id: noteId, title: data.title || '', content: data.content || '',
+                note_color: 'none', is_pinned: false, has_password: false,
+                note_password: null, is_shared: false, labels: [],
+                updated_at: 'Just now', created_at_ts: Math.floor(Date.now() / 1000),
+                syncStatus: 'pending_update', _pending: true,
+            });
+        } else {
+            const newStatus = existing.syncStatus === 'pending_create'
+                ? 'pending_create'  // keep as pending_create
+                : 'pending_update';
+            await db.put(STORE_NOTES, {
+                ...existing,
+                title:      data.title   ?? existing.title,
+                content:    data.content ?? existing.content,
+                updated_at: 'Just now',
+                syncStatus: newStatus,
+                _pending:   true,
+                _localEditedAt: Date.now(),  // for conflict detection
+            });
+        }
+        // Queue update for sync (unless it's a temp note — those use pending_creates)
+        if (typeof noteId === 'number' || !String(noteId).startsWith('temp_')) {
+            await db.put(STORE_UPDATES, {
+                noteId, title: data.title || '', content: data.content || '',
+                queued_at: Date.now(),
+            });
+        }
+    } catch (e) {
+        console.warn('[IDB] updateNoteOfflineFirst failed:', e);
     }
 }
 
@@ -261,10 +389,29 @@ export async function syncAllPending(csrfToken) {
                         }),
                     });
 
+                    // ★ ATOMIC: delete tempId + insert realId in ONE transaction
+                    // Prevents note loss if a failure occurs mid-operation.
+                    const db = await getDB();
+                    const tx = db.transaction(STORE_NOTES, 'readwrite');
+                    await tx.store.delete(item.tempId);
+                    await tx.store.put({
+                        id:            newId,
+                        title:         item.title   || '',
+                        content:       item.content || '',
+                        note_color:    'none',
+                        is_pinned:     false,
+                        has_password:  false,
+                        note_password: null,
+                        is_shared:     false,
+                        labels:        [],
+                        updated_at:    'Just now',
+                        created_at_ts: item.created_at_ts || Math.floor(Date.now() / 1000),
+                        syncStatus:    'synced',
+                    });
+                    await tx.done;
+
                     // Remove from pending_creates queue
                     await removePendingCreate(item.tempId);
-                    // Remove the temp note from IDB notes store
-                    await deleteNoteFromIDB(item.tempId);
                     result.created++;
                 }
             } catch (e) {

@@ -6,15 +6,20 @@ import Pusher from 'pusher-js';
 import {
     saveNotesToIDB, mergeServerNotesIntoIDB,
     getNotesFromIDB, deleteNoteFromIDB, updateNoteInIDB, hasOfflineNotes,
+    getNoteById, createNoteOfflineFirst, updateNoteOfflineFirst,
     queueCreate, queueUpdate,
     getPendingCreates, getPendingUpdates,
     removePendingCreate, removePendingUpdate,
-    syncAllPending, getPendingSyncCount,
+    syncAllPending, getPendingSyncCount, getAllNotes,
     saveLabelsToIDB, getLabelsFromIDB,
     savePreferencesToIDB, getPreferencesFromIDB,
     saveProfileToIDB, getProfileFromIDB,
     queueProfileUpdate, getProfileQueue, clearProfileQueue,
 } from './offline-db.js';
+import {
+    handleRoute, navigateToNote, navigateToList,
+    createNoteOffline, loadNotesState, renderList, initOfflineEvents,
+} from './offline-router.js';
 import bcrypt from 'bcryptjs';
 
 // Fonts: Inter bundled via @fontsource in app.css, Material Icons served from public/fonts/
@@ -55,6 +60,9 @@ window.getNotesFromIDB        = getNotesFromIDB;
 window.deleteNoteFromIDB      = deleteNoteFromIDB;
 window.updateNoteInIDB        = updateNoteInIDB;
 window.hasOfflineNotes        = hasOfflineNotes;
+window.getNoteById            = getNoteById;
+window.createNoteOfflineFirst = createNoteOfflineFirst;
+window.updateNoteOfflineFirst = updateNoteOfflineFirst;
 window.queueCreate            = queueCreate;
 window.queueUpdate            = queueUpdate;
 window.getPendingCreates      = getPendingCreates;
@@ -75,6 +83,26 @@ window.getProfileQueue    = getProfileQueue;
 window.clearProfileQueue  = clearProfileQueue;
 // Offline password verification (bcryptjs)
 window.bcryptCompareSync  = bcrypt.compareSync;
+
+// Offline router — expose globally (no shouldIntercept — explicit route detection)
+window.offlineRouter = {
+    handleRoute, navigateToNote, navigateToList,
+    createNoteOffline, loadNotesState, renderList,
+};
+
+// Initialize online/offline event handlers
+initOfflineEvents();
+
+// ── Explicit offline route init ──────────────────────────────
+// When the page loads offline on a /notes route, the client-side
+// router takes over immediately (no heuristic interception).
+document.addEventListener('DOMContentLoaded', () => {
+    const isNotesRoute = location.pathname === '/notes'
+        || location.pathname.startsWith('/notes/');
+    if (!navigator.onLine && isNotesRoute) {
+        handleRoute();
+    }
+});
 
 
 /* ══════════════════════════════════════════════════════════════

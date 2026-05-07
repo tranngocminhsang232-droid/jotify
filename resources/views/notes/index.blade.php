@@ -1308,10 +1308,14 @@
         }
         const editUrl = '/notes/'+noteId+'/edit';
         setTimeout(() => {
-            // When offline, use direct navigation so the SW can serve offline-note.html
-            // (ajaxNav would try to parse it as a Blade layout and fail)
+            // When offline, use the client-side router to render the offline editor
+            // (fixes "Note not found" bug — no full page reload needed)
             if (!navigator.onLine) {
-                location.href = editUrl;
+                if (window.offlineRouter) {
+                    window.offlineRouter.navigateToNote(noteId);
+                } else {
+                    location.href = editUrl;
+                }
             } else if (window.ajaxNav) {
                 window.ajaxNav(editUrl);
             } else {
@@ -1610,13 +1614,18 @@
 
             await window.queueCreate(tempId, newNote);
 
-            // Re-render from IDB to show the new note
-            if (window.getNotesFromIDB) {
-                const refreshed = await window.getNotesFromIDB();
-                window.renderNotes && window.renderNotes(refreshed);
+            // Navigate to the offline editor for the new note
+            if (window.offlineRouter) {
+                window.offlineRouter.navigateToNote(tempId);
+            } else {
+                // Fallback: re-render list from IDB
+                if (window.getNotesFromIDB) {
+                    const refreshed = await window.getNotesFromIDB();
+                    window.renderNotes && window.renderNotes(refreshed);
+                }
             }
 
-            showToast('Note saved offline — will sync when back online', 'warning');
+            showToast('Note created offline — will sync when online', 'info');
         };
 
         // ── Reconnect handler: sync + reload ─────────────────────────────────

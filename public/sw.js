@@ -1,30 +1,26 @@
 /**
- * sw.js — JOTIFY Service Worker v17
+ * sw.js — JOTIFY Service Worker v21 (Offline-First Phase 1)
  * ──────────────────────────────────────────────────────────
- * PRODUCTION-READY for Railway (HTTPS, reverse proxy)
- *
  * Strategies:
- *   Cache-First  → static assets (CSS, JS, fonts, images)
- *   Network-First → pages + API — with offline HTML fallback
+ *   Stale-While-Revalidate → JS, CSS bundles (users get fast load + fresh assets)
+ *   Cache-First            → static assets (fonts, images, icons)
+ *   Network-First          → API calls (JSON error fallback when offline)
+ *   App Shell              → /notes/* navigation when offline returns cached /notes
  *
- * Key design decisions:
- *   - Install pre-caches ONLY static files (no auth-required routes)
- *   - Auth pages (/notes, /profile) are cached on-the-fly via fetch handler
- *   - All cache keys use full URLs to avoid mismatch between
- *     cache.put(string) and caches.match(Request)
+ * Key features:
+ *   - Navigation Preload for faster online navigation
+ *   - App shell pattern: /notes/* → cached /notes page (client-side router takes over)
+ *   - Non-notes offline navigation → "This page requires internet" message
+ *   - Pre-cache ONLY static files (no auth-required routes)
  *   - Origin check uses self.location.origin (works on any domain)
  * ──────────────────────────────────────────────────────────
  */
 
-const CACHE_VER   = 'jotify-v19';
-const ASSET_CACHE = 'jotify-assets-v19';
+const CACHE_VER   = 'jotify-v21';
+const ASSET_CACHE = 'jotify-assets-v21';
 
 // ── Only pre-cache static files that DON'T require authentication ────────────
-// Auth routes (/notes, /profile) would 302 → /login during install,
-// which silently caches the login page as if it were the notes page.
-// Those routes are cached on-the-fly when the user navigates while online.
 const PRECACHE_URLS = [
-    '/offline-note.html',
     '/offline.html',
     '/manifest.json',
     '/jotify-logo.png',
@@ -35,8 +31,8 @@ function fullUrl(path) {
     return new URL(path, self.location.origin).href;
 }
 
-// ── Minimal offline shell (inline HTML) ──────────────────────────────────────
-function offlineShell(pathname) {
+// ── Inline HTML: "This page requires internet" for non-notes routes ──────────
+function requiresInternetShell(pathname) {
     return new Response(
         `<!DOCTYPE html><html><head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -46,27 +42,28 @@ function offlineShell(pathname) {
                  display:flex;flex-direction:column;align-items:center;justify-content:center;
                  min-height:100vh;margin:0;gap:1rem;text-align:center;padding:1rem;}
             h1{font-size:1.5rem;margin:0}p{color:#a3e6bb;margin:0}
-            a{color:#22c55e;text-decoration:underline}
-            button{margin-top:1rem;background:#22c55e;color:#fff;border:none;padding:0.7rem 1.5rem;
-                   border-radius:0.75rem;font-size:0.9rem;font-weight:700;cursor:pointer;}
+            a{color:#22c55e;text-decoration:underline;font-weight:600}
+            .icon{font-size:3rem;margin-bottom:0.5rem;opacity:0.7}
+            .path{font-size:0.8rem;opacity:0.5;word-break:break-all;margin-top:0.5rem}
         </style></head><body>
-        <h1>📴 You are offline</h1>
-        <p>The page <strong>${pathname}</strong> hasn't been cached yet.</p>
-        <p>Please <a href="/notes">go back to Notes</a> and try again when you're online.</p>
-        <button onclick="location.reload()">Retry</button>
+        <div class="icon">🌐</div>
+        <h1>This page requires internet</h1>
+        <p>The page <strong>${pathname}</strong> is not available offline.</p>
+        <p>Only your notes are accessible without a connection.</p>
+        <a href="/notes">← Back to Notes</a>
+        <div class="path">${pathname}</div>
         </body></html>`,
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// INSTALL — pre-cache static files (robust: one failure does NOT block others)
+// INSTALL — pre-cache static files
 // ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
     console.log('[SW] Installing', CACHE_VER);
     event.waitUntil(
         caches.open(CACHE_VER).then(cache => {
-            // Fetch each URL independently — one failure won't break the rest
             return Promise.all(
                 PRECACHE_URLS.map(path => {
                     const url = fullUrl(path);
@@ -91,19 +88,27 @@ self.addEventListener('install', (event) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ACTIVATE — clean old caches + claim all clients immediately
+// ACTIVATE — clean old caches + claim clients + enable Navigation Preload
 // ══════════════════════════════════════════════════════════════════════════════
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activating', CACHE_VER);
     event.waitUntil(
-        caches.keys().then(keys => {
-            const old = keys.filter(k => k !== CACHE_VER && k !== ASSET_CACHE);
-            if (old.length) console.log('[SW] Deleting old caches:', old);
-            return Promise.all(old.map(k => caches.delete(k)));
-        }).then(() => {
-            console.log('[SW] Claiming clients');
-            return self.clients.claim();
-        })
+        Promise.all([
+            // Clean old caches
+            caches.keys().then(keys => {
+                const old = keys.filter(k => k !== CACHE_VER && k !== ASSET_CACHE);
+                if (old.length) console.log('[SW] Deleting old caches:', old);
+                return Promise.all(old.map(k => caches.delete(k)));
+            }),
+            // Enable Navigation Preload (reduces latency for online navigations)
+            self.registration.navigationPreload
+                ? self.registration.navigationPreload.enable()
+                    .then(() => console.log('[SW] Navigation Preload enabled'))
+                    .catch(() => {})
+                : Promise.resolve(),
+            // Claim all clients immediately
+            self.clients.claim().then(() => console.log('[SW] Claiming clients')),
+        ])
     );
 });
 
@@ -127,9 +132,13 @@ self.addEventListener('message', (event) => {
                 fetch(new Request(url, { credentials: 'include', cache: 'no-store' }))
                     .then(res => {
                         if (res.ok && !res.redirected) {
-                            // Only cache if we got the actual page, NOT a redirect to /login
-                            cache.put(url, res);
+                            cache.put(url, res.clone());
                             console.log('[SW] Cached (msg):', path, '→', res.status);
+                            // Also store /notes as the app shell
+                            if (path === '/notes') {
+                                cache.put(fullUrl('/__app_shell__'), res.clone());
+                                console.log('[SW] App shell cached from /notes');
+                            }
                         } else {
                             console.warn('[SW] Skip cache (msg):', path,
                                 '→ status:', res.status, 'redirected:', res.redirected);
@@ -158,30 +167,67 @@ self.addEventListener('fetch', (event) => {
         url.protocol === 'data:') return;
 
     // ★ Skip cross-origin requests (CDN fonts, Pusher, external APIs)
-    //   This replaces the old localhost filter — works on ANY domain.
     if (url.origin !== self.location.origin) return;
 
     // Skip Pusher/WebSocket auth
     if (url.pathname.includes('broadcasting/auth')) return;
 
-    // ── Cache-First: static assets ───────────────────────────────────────
+    // ── Stale-While-Revalidate: JS/CSS bundles ──────────────────────────
+    // Users get the cached version immediately while we fetch a fresh copy
+    // in the background. Prevents stale assets after deployment.
     if (
         url.pathname.startsWith('/build/') ||
+        url.pathname.match(/\.(css|js)$/)
+    ) {
+        event.respondWith(staleWhileRevalidate(req));
+        return;
+    }
+
+    // ── Cache-First: static assets (fonts, images, icons) ───────────────
+    if (
         url.pathname.startsWith('/storage/') ||
-        url.pathname.startsWith('/js/') ||
         url.pathname.startsWith('/fonts/') ||
-        url.pathname.match(/\.(css|js|woff2?|ttf|svg|png|jpg|jpeg|ico|webp|gif)$/)
+        url.pathname.match(/\.(woff2?|ttf|svg|png|jpg|jpeg|ico|webp|gif)$/)
     ) {
         event.respondWith(cacheFirst(req));
         return;
     }
 
     // ── Network-First: pages + API ───────────────────────────────────────
-    event.respondWith(networkFirst(req));
+    event.respondWith(networkFirst(req, event));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CACHE-FIRST — for versioned/static assets (CSS, JS, fonts, images)
+// STALE-WHILE-REVALIDATE — for JS/CSS bundles
+// Serve from cache immediately, then update cache in background.
+// ══════════════════════════════════════════════════════════════════════════════
+async function staleWhileRevalidate(req) {
+    const cached = await caches.match(req);
+
+    // Fire-and-forget: fetch fresh version and update cache
+    const fetchPromise = fetch(req)
+        .then(async (res) => {
+            if (res.ok) {
+                const cache = await caches.open(ASSET_CACHE);
+                await cache.put(req, res.clone());
+            }
+            return res;
+        })
+        .catch(() => null);
+
+    // Return cached version immediately if available, otherwise wait for network
+    if (cached) {
+        return cached;
+    }
+
+    const networkRes = await fetchPromise;
+    if (networkRes) return networkRes;
+
+    return new Response('', { status: 503, statusText: 'Asset unavailable offline' });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CACHE-FIRST — for static assets (fonts, images, icons)
 // ══════════════════════════════════════════════════════════════════════════════
 async function cacheFirst(req) {
     const cached = await caches.match(req);
@@ -195,50 +241,61 @@ async function cacheFirst(req) {
         }
         return res;
     } catch {
-        // Asset unavailable offline — return transparent fallback
         return new Response('', { status: 503, statusText: 'Asset unavailable offline' });
     }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// NETWORK-FIRST — for pages + API (cache on success, serve cache when offline)
+// NETWORK-FIRST — for pages + API
+// ── APP SHELL PATTERN for /notes routes ─────────────────────────────────────
+//
+// When offline, ALL /notes/* navigation requests get the cached /notes page
+// (the "app shell"). The client-side router then reads the URL, loads the
+// right note from IndexedDB, and renders it.
+//
+// For non-notes routes when offline → "This page requires internet" message.
 // ══════════════════════════════════════════════════════════════════════════════
-async function networkFirst(req) {
+async function networkFirst(req, event) {
     const url = new URL(req.url);
 
     try {
-        const res = await fetch(req);
+        // Use Navigation Preload response if available (faster online navigations)
+        const preloadResponse = event.preloadResponse ? await event.preloadResponse : null;
+        const res = preloadResponse || await fetch(req);
 
         // Cache successful, non-redirected responses
-        // (don't cache 302→login responses under the original URL)
         if (res.ok && !res.redirected) {
             const cache = await caches.open(CACHE_VER);
             cache.put(req, res.clone());
+
+            // ★ Also cache /notes as the app shell
+            if (url.pathname === '/notes') {
+                cache.put(fullUrl('/__app_shell__'), res.clone());
+            }
         }
 
         return res;
     } catch {
         // ── Offline fallback logic ───────────────────────────────────────
 
-        // Note editor routes → ALWAYS serve the IDB-backed offline shell
-        // regardless of request mode (navigate OR AJAX fetch).
-        // This prevents stale cached HTML from showing empty note content.
-        if (/^\/notes\/\d+(\/edit)?$/.test(url.pathname)) {
-            const shell = await caches.match(fullUrl('/offline-note.html'));
+        // ★ APP SHELL: /notes/* routes → return cached /notes page
+        // The client-side router will render the correct view from IDB.
+        if (/^\/notes(\/.*)?$/.test(url.pathname)) {
+            // Try the dedicated app shell first
+            const shell = await caches.match(fullUrl('/__app_shell__'));
             if (shell) return shell.clone();
+            // Fallback: try the exact /notes cache
+            const notesPage = await caches.match(fullUrl('/notes'));
+            if (notesPage) return notesPage.clone();
         }
 
         // Try to find this exact URL in cache
         const cached = await caches.match(req);
         if (cached) return cached;
 
-        // Navigation: return branded offline page
+        // ★ Navigation to non-notes routes → "requires internet" message
         if (req.mode === 'navigate') {
-            // Try the pre-cached offline.html first
-            const offlinePage = await caches.match(fullUrl('/offline.html'));
-            if (offlinePage) return offlinePage;
-            // Last resort: inline offline shell
-            return offlineShell(url.pathname);
+            return requiresInternetShell(url.pathname);
         }
 
         // Non-navigation (API/JSON) — return JSON error

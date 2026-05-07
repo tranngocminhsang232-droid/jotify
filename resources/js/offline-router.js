@@ -89,15 +89,13 @@ export async function handleRoute() {
         const noteId = /^\d+$/.test(noteIdStr) ? parseInt(noteIdStr, 10) : noteIdStr;
         await renderDetail(noteId);
     } else {
-        // /notes list — the Blade template's loadNotesOfflineFirst() already handles
-        // IDB rendering when the page loads from the SW cache. Only call renderList()
-        // if the page is a bare shell with no existing note content.
+        // /notes list — on first page load (from SW cache), Blade's
+        // loadNotesOfflineFirst() handles rendering. On SPA back-navigation,
+        // we render the list ourselves with updated IDB data.
         const hasExistingCards = document.getElementById('notes-container');
         if (!hasExistingCards) {
             await renderList();
         }
-        // If notes-container exists, loadNotesOfflineFirst() in the Blade script
-        // will handle re-rendering from IDB — we don't need to intervene.
     }
 }
 
@@ -119,11 +117,15 @@ export async function navigateToList() {
     _currentNoteId  = null;
     clearTimeout(_editorSaveTimer);
 
-    // Always reload /notes — the note card CSS lives inside the Blade template's
-    // <style> block which gets destroyed when renderDetail() replaces #page-content.
-    // The SW will serve the cached app shell (with CSS), and DOMContentLoaded
-    // in app.js will call handleRoute() → renderList() from IDB when offline.
-    location.href = '/notes';
+    if (navigator.onLine) {
+        location.href = '/notes';
+        return;
+    }
+
+    // SPA navigation — instant back with updated content from IDB
+    history.pushState({}, '', '/notes');
+    if (!_stateLoaded) await loadNotesState();
+    await renderList();
 }
 
 /** Create a new note offline and open the editor. */
@@ -277,6 +279,11 @@ async function renderDetail(noteId) {
     const container = getContentContainer();
     if (!container) return;
 
+    // ★ Preserve <style> tags from the content area before replacing.
+    // The note card CSS is defined in index.blade.php's @section('content').
+    // Lifting styles to <head> keeps them alive for SPA back-navigation.
+    _preserveContentStyles(container);
+
     // Update header for editor mode
     updateHeaderForEditor();
 
@@ -291,6 +298,34 @@ async function renderDetail(noteId) {
 
     // Attach auto-save listeners
     attachEditorListeners(noteId);
+}
+
+/**
+ * Lift <style> tags from a container into <head> so they survive innerHTML replacement.
+ * Uses a data attribute to avoid duplicating styles on multiple navigations.
+ */
+function _preserveContentStyles(container) {
+    // Also check the parent (styles might be siblings of #page-content)
+    const searchRoots = [container];
+    if (container.parentElement) searchRoots.push(container.parentElement);
+
+    searchRoots.forEach(root => {
+        root.querySelectorAll('style').forEach(style => {
+            if (style.dataset.preserved) return; // already handled
+
+            const id = style.id || ('preserved-style-' + Math.random().toString(36).substr(2, 8));
+            // Skip if already in <head>
+            if (document.head.querySelector(`style[data-preserved-id="${id}"]`)) return;
+
+            const clone = style.cloneNode(true);
+            clone.dataset.preservedId = id;
+            clone.removeAttribute('id'); // avoid duplicate IDs
+            document.head.appendChild(clone);
+
+            style.dataset.preserved = '1'; // mark original
+            console.log('[Router] Preserved style to <head>:', id);
+        });
+    });
 }
 
 // ── Header management ────────────────────────────────────────

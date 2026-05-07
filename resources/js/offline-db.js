@@ -1,16 +1,18 @@
 /**
  * offline-db.js — JOTIFY IndexedDB wrapper (dùng idb library)
- * v3: Offline-first architecture
+ * v4: Production-grade schema migration + self-healing
  *   - IDB is the single source of truth for the UI
  *   - Server is a sync target, not primary data source
  *   - syncStatus on every note: 'synced' | 'pending_create' | 'pending_update'
  *   - Never clear() the store — diff-based merge only
  *   - Sync mutex prevents concurrent sync operations
+ *   - Automatic corrupted DB recovery (delete + recreate)
+ *   - Schema validation after every open
  */
 import { openDB } from 'idb';
 
 const DB_NAME    = 'jotify-offline';
-const DB_VERSION = 3;
+const DB_VERSION = 4; // Bumped to force migration on ALL legacy DBs
 
 const STORE_NOTES    = 'notes';
 const STORE_CREATES  = 'pending_creates';   // notes tạo offline, chờ sync
@@ -19,41 +21,147 @@ const STORE_LABELS   = 'labels';            // cache labels của user
 const STORE_PREFS    = 'preferences';       // cache preferences
 const STORE_PROFILE  = 'profile';           // offline profile cache + pending update
 
+// ALL stores the app requires — used for validation after open
+const REQUIRED_STORES = [
+    STORE_NOTES, STORE_CREATES, STORE_UPDATES,
+    STORE_LABELS, STORE_PREFS, STORE_PROFILE,
+];
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SINGLETON DB PROMISE — prevents race conditions during first load.
+// All callers await the same promise; the DB is opened exactly once.
+// ══════════════════════════════════════════════════════════════════════════════
+let _dbPromise = null;
+
 function getDB() {
-    return openDB(DB_NAME, DB_VERSION, {
-        upgrade(db, oldVersion) {
-            // v1 stores
-            if (!db.objectStoreNames.contains(STORE_NOTES)) {
-                const store = db.createObjectStore(STORE_NOTES, { keyPath: 'id' });
-                store.createIndex('is_pinned',  'is_pinned',  { unique: false });
-                store.createIndex('updated_at', 'updated_at', { unique: false });
-            }
-            // v2 stores
-            if (oldVersion < 2) {
+    if (!_dbPromise) {
+        _dbPromise = _openAndValidate();
+    }
+    return _dbPromise;
+}
+
+/**
+ * Open the DB, run migrations, and validate the schema.
+ * If validation fails (stores missing), auto-recover by deleting + reloading.
+ */
+async function _openAndValidate() {
+    try {
+        const db = await openDB(DB_NAME, DB_VERSION, {
+            upgrade(db, oldVersion, newVersion) {
+                console.log(`[IDB] Upgrading schema: v${oldVersion} → v${newVersion}`);
+                console.log('[IDB] Existing stores before migration:', [...db.objectStoreNames]);
+
+                // ── Create ALL stores unconditionally (idempotent via contains() guard) ──
+                // This handles: fresh installs, partial legacy schemas from offline-note.html,
+                // and any corrupted DBs that had some stores but not others.
+
+                if (!db.objectStoreNames.contains(STORE_NOTES)) {
+                    console.log('[IDB] Creating store:', STORE_NOTES);
+                    const store = db.createObjectStore(STORE_NOTES, { keyPath: 'id' });
+                    store.createIndex('is_pinned',  'is_pinned',  { unique: false });
+                    store.createIndex('updated_at', 'updated_at', { unique: false });
+                }
+
                 if (!db.objectStoreNames.contains(STORE_CREATES)) {
+                    console.log('[IDB] Creating store:', STORE_CREATES);
                     db.createObjectStore(STORE_CREATES, { keyPath: 'tempId' });
                 }
+
                 if (!db.objectStoreNames.contains(STORE_UPDATES)) {
+                    console.log('[IDB] Creating store:', STORE_UPDATES);
                     db.createObjectStore(STORE_UPDATES, { keyPath: 'noteId' });
                 }
+
                 if (!db.objectStoreNames.contains(STORE_LABELS)) {
+                    console.log('[IDB] Creating store:', STORE_LABELS);
                     db.createObjectStore(STORE_LABELS, { keyPath: 'id' });
                 }
+
                 if (!db.objectStoreNames.contains(STORE_PREFS)) {
+                    console.log('[IDB] Creating store:', STORE_PREFS);
                     db.createObjectStore(STORE_PREFS, { keyPath: 'key' });
                 }
-            }
-            // v3 stores
-            if (oldVersion < 3) {
+
                 if (!db.objectStoreNames.contains(STORE_PROFILE)) {
-                    // key = 'current' for cached data, 'pending' for queued update
+                    console.log('[IDB] Creating store:', STORE_PROFILE);
                     db.createObjectStore(STORE_PROFILE, { keyPath: 'key' });
                 }
-            }
 
-        },
-    });
+                console.log('[IDB] Stores after migration:', [...db.objectStoreNames]);
+            },
+        });
+
+        // ── Post-open schema validation ──────────────────────────────────────
+        console.log('[IDB] DB opened, version:', db.version, 'stores:', [...db.objectStoreNames]);
+
+        const missing = REQUIRED_STORES.filter(s => !db.objectStoreNames.contains(s));
+        if (missing.length > 0) {
+            console.error('[IDB] SCHEMA INVALID — missing stores:', missing);
+            _triggerRecovery(db);
+            // Return a rejected promise so callers get an error instead of a broken db
+            throw new Error('[IDB] Schema invalid, recovery triggered');
+        }
+
+        return db;
+
+    } catch (err) {
+        console.error('[IDB] Failed to open DB:', err);
+        // If the error is a VersionError (downgrade attempt) or schema issue,
+        // trigger recovery. Otherwise re-throw.
+        if (err.name === 'VersionError' || err.message?.includes('Schema invalid')) {
+            _triggerRecovery(null);
+        }
+        throw err;
+    }
 }
+
+/**
+ * Auto-recovery: close the broken DB, delete it, and reload the page.
+ * Uses sessionStorage to prevent infinite reload loops.
+ */
+function _triggerRecovery(db) {
+    const RECOVERY_KEY = 'idb-recovery-v4';
+
+    // Guard: prevent infinite reload loop
+    if (sessionStorage.getItem(RECOVERY_KEY)) {
+        console.error('[IDB] Recovery already attempted this session — aborting to prevent loop.');
+        sessionStorage.removeItem(RECOVERY_KEY);
+        return;
+    }
+
+    console.warn('[IDB] ▸ Triggering automatic DB recovery...');
+    sessionStorage.setItem(RECOVERY_KEY, '1');
+
+    // Reset singleton so next call will re-open
+    _dbPromise = null;
+
+    try {
+        if (db) db.close();
+    } catch (_) {}
+
+    // Delete the corrupted database and reload
+    const delReq = indexedDB.deleteDatabase(DB_NAME);
+    delReq.onsuccess = () => {
+        console.log('[IDB] ▸ Corrupted DB deleted — reloading...');
+        location.reload();
+    };
+    delReq.onerror = () => {
+        console.error('[IDB] ▸ Failed to delete DB — reloading anyway...');
+        location.reload();
+    };
+    delReq.onblocked = () => {
+        console.warn('[IDB] ▸ DB delete blocked (other tabs open) — reloading...');
+        location.reload();
+    };
+}
+
+// Clear recovery flag on successful page load (means recovery worked)
+try {
+    if (sessionStorage.getItem('idb-recovery-v4')) {
+        console.log('[IDB] Recovery successful — clearing flag');
+        sessionStorage.removeItem('idb-recovery-v4');
+    }
+} catch (_) {}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // NOTES — offline-first read/write with syncStatus tracking

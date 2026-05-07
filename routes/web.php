@@ -60,23 +60,25 @@ Route::middleware('auth')->group(function () {
     // ─── Offline data API (returns full content for IDB cache) ────────────
     Route::get('/api/notes-offline-data', function () {
         $user = \Illuminate\Support\Facades\Auth::user();
-        $notes = $user->notes()->with(['labels', 'shares'])->ordered()->get();
+        $notes = $user->notes()->with(['labels', 'shares', 'images'])->ordered()->get();
         $labels = $user->labels()->orderBy('name')->get();
 
         return response()->json([
             'notes' => $notes->map(function ($n) {
                 return [
-                    'id'            => $n->id,
-                    'title'         => $n->title ?? '',
-                    'content'       => $n->content ?? '',
-                    'note_color'    => $n->note_color ?? 'none',
-                    'is_pinned'     => (bool) $n->is_pinned,
-                    'has_password'  => (bool) $n->has_password,
-                    'note_password' => $n->note_password ?? null,
-                    'is_shared'     => $n->shares->count() > 0,
-                    'labels'        => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
-                    'updated_at'    => $n->updated_at?->diffForHumans() ?? '',
-                    'created_at_ts' => $n->created_at?->timestamp ?? 0,
+                    'id'              => $n->id,
+                    'title'           => $n->title ?? '',
+                    'content'         => $n->content ?? '',
+                    'note_color'      => $n->note_color ?? 'none',
+                    'is_pinned'       => (bool) $n->is_pinned,
+                    'pinned_at_ts'    => $n->pinned_at?->timestamp ?? 0,
+                    'has_password'    => (bool) $n->has_password,
+                    'note_password'   => $n->note_password ?? null,
+                    'is_shared'       => $n->shares->count() > 0,
+                    'labels'          => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
+                    'first_image_url' => $n->images->count() > 0 ? asset('storage/' . $n->images->first()->image_path) : null,
+                    'updated_at'      => $n->updated_at?->diffForHumans() ?? '',
+                    'created_at_ts'   => $n->created_at?->timestamp ?? 0,
                 ];
             })->values(),
             'labels' => $labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values(),

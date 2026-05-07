@@ -1432,17 +1432,19 @@
         @php
         $notesOfflineData = $notes->map(function($n) {
             return [
-                'id'            => $n->id,
-                'title'         => $n->title ?? '',
-                'content'       => $n->content ?? '',
-                'note_color'    => $n->note_color ?? 'none',
-                'is_pinned'     => (bool) $n->is_pinned,
-                'has_password'  => (bool) $n->has_password,
-                'note_password' => $n->note_password ?? null, // bcrypt hash for offline verify
-                'is_shared'     => $n->shares->count() > 0,
-                'labels'        => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
-                'updated_at'    => $n->updated_at?->diffForHumans() ?? '',
-                'created_at_ts' => $n->created_at?->timestamp ?? 0,
+                'id'              => $n->id,
+                'title'           => $n->title ?? '',
+                'content'         => $n->content ?? '',
+                'note_color'      => $n->note_color ?? 'none',
+                'is_pinned'       => (bool) $n->is_pinned,
+                'pinned_at_ts'    => $n->pinned_at?->timestamp ?? 0,
+                'has_password'    => (bool) $n->has_password,
+                'note_password'   => $n->note_password ?? null, // bcrypt hash for offline verify
+                'is_shared'       => $n->shares->count() > 0,
+                'labels'          => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
+                'first_image_url' => $n->images->count() > 0 ? asset('storage/' . $n->images->first()->image_path) : null,
+                'updated_at'      => $n->updated_at?->diffForHumans() ?? '',
+                'created_at_ts'   => $n->created_at?->timestamp ?? 0,
             ];
         })->values();
         $labelsOfflineData = $labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values();

@@ -220,29 +220,33 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                 // Keep local title/content (user edited offline), update metadata
                 await tx.store.put({
                     ...existing,
-                    note_color:    note.note_color   ?? existing.note_color,
-                    is_pinned:     note.is_pinned    ?? existing.is_pinned,
-                    has_password:  note.has_password  ?? existing.has_password,
-                    note_password: note.note_password ?? existing.note_password,
-                    is_shared:     note.is_shared     ?? existing.is_shared,
-                    labels:        note.labels        ?? existing.labels,
+                    note_color:      note.note_color      ?? existing.note_color,
+                    is_pinned:       note.is_pinned        ?? existing.is_pinned,
+                    pinned_at_ts:    note.pinned_at_ts     ?? existing.pinned_at_ts ?? 0,
+                    has_password:    note.has_password      ?? existing.has_password,
+                    note_password:   note.note_password     ?? existing.note_password,
+                    is_shared:       note.is_shared         ?? existing.is_shared,
+                    labels:          note.labels            ?? existing.labels,
+                    first_image_url: note.first_image_url  ?? existing.first_image_url ?? null,
                     // syncStatus stays 'pending_update'
                 });
             } else {
                 // Fresh write or update a synced note
                 await tx.store.put({
-                    id:            note.id,
-                    title:         note.title         ?? '',
-                    content:       note.content       ?? '',
-                    note_color:    note.note_color    ?? '#ffffff',
-                    is_pinned:     note.is_pinned     ?? false,
-                    has_password:  note.has_password   ?? false,
-                    note_password: note.note_password  ?? null,
-                    is_shared:     note.is_shared      ?? false,
-                    labels:        note.labels         ?? [],
-                    updated_at:    note.updated_at     ?? '',
-                    created_at_ts: note.created_at_ts  ?? 0,
-                    syncStatus:    'synced',
+                    id:              note.id,
+                    title:           note.title            ?? '',
+                    content:         note.content          ?? '',
+                    note_color:      note.note_color       ?? '#ffffff',
+                    is_pinned:       note.is_pinned        ?? false,
+                    pinned_at_ts:    note.pinned_at_ts     ?? 0,
+                    has_password:    note.has_password      ?? false,
+                    note_password:   note.note_password     ?? null,
+                    is_shared:       note.is_shared         ?? false,
+                    labels:          note.labels            ?? [],
+                    first_image_url: note.first_image_url  ?? null,
+                    updated_at:      note.updated_at        ?? '',
+                    created_at_ts:   note.created_at_ts     ?? 0,
+                    syncStatus:      'synced',
                 });
             }
         }

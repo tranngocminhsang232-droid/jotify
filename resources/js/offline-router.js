@@ -85,10 +85,19 @@ export async function handleRoute() {
 
     const noteIdStr = parseNoteId(path);
     if (noteIdStr) {
+        // /notes/:id — always render the offline editor
         const noteId = /^\d+$/.test(noteIdStr) ? parseInt(noteIdStr, 10) : noteIdStr;
         await renderDetail(noteId);
     } else {
-        await renderList();
+        // /notes list — the Blade template's loadNotesOfflineFirst() already handles
+        // IDB rendering when the page loads from the SW cache. Only call renderList()
+        // if the page is a bare shell with no existing note content.
+        const hasExistingCards = document.getElementById('notes-container');
+        if (!hasExistingCards) {
+            await renderList();
+        }
+        // If notes-container exists, loadNotesOfflineFirst() in the Blade script
+        // will handle re-rendering from IDB — we don't need to intervene.
     }
 }
 
@@ -110,14 +119,11 @@ export async function navigateToList() {
     _currentNoteId  = null;
     clearTimeout(_editorSaveTimer);
 
-    if (navigator.onLine) {
-        location.href = '/notes';
-        return;
-    }
-
-    history.pushState({}, '', '/notes');
-    if (!_stateLoaded) await loadNotesState();
-    await renderList();
+    // Always reload /notes — the note card CSS lives inside the Blade template's
+    // <style> block which gets destroyed when renderDetail() replaces #page-content.
+    // The SW will serve the cached app shell (with CSS), and DOMContentLoaded
+    // in app.js will call handleRoute() → renderList() from IDB when offline.
+    location.href = '/notes';
 }
 
 /** Create a new note offline and open the editor. */

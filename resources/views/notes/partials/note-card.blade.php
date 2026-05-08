@@ -88,8 +88,8 @@
             <p class="note-preview">{{ \Str::limit(strip_tags($note->content), 100) }}</p>
             @endif
 
-            {{-- Thumbnail ảnh đính kèm đầu tiên --}}
-            @if($note->images->count() > 0)
+            {{-- Thumbnail ảnh đính kèm đầu tiên (ẩn nếu note có mật khẩu) --}}
+            @if(!$note->has_password && $note->images->count() > 0)
             <div class="note-thumb-wrap">
                 <img src="{{ asset('storage/' . $note->images->first()->image_path) }}"
                      alt="Attachment"
@@ -154,8 +154,8 @@
                 </div>
             </div>
 
-            {{-- Full-width image preview below content (same as grid view) --}}
-            @if($note->images->count() > 0)
+            {{-- Full-width image preview below content (ẩn nếu note có mật khẩu) --}}
+            @if(!$note->has_password && $note->images->count() > 0)
             <div class="note-thumb-wrap">
                 <img src="{{ asset('storage/' . $note->images->first()->image_path) }}"
                      alt="Attachment"

@@ -913,8 +913,8 @@
                 <span class="swipe-label">Delete</span>
             </div>`;
 
-        // Full-width preview image — used in BOTH grid and list views
-        const thumbGrid = note.first_image_url
+        // Full-width preview image — hidden for password-protected notes
+        const thumbGrid = (!note.has_password && note.first_image_url)
             ? `<div class="note-thumb-wrap">
                 <img src="${note.first_image_url}" alt="Attachment" class="note-preview-img" loading="lazy">
                </div>`
@@ -937,7 +937,9 @@
                         ${pinBadge}
                         ${labelsGridHtml ? `<div class="note-grid-labels flex flex-wrap gap-1 mt-1">${labelsGridHtml}</div>` : ''}
                     </div>
-                    <p class="note-preview">${esc(note.content)}</p>
+                    ${note.has_password
+                        ? `<p class="note-preview" style="font-style:italic;opacity:0.5;">🔒 Content is protected</p>`
+                        : `<p class="note-preview">${esc(note.content)}</p>`}
                     ${thumbGrid}
                     <div class="note-footer"><span class="note-time">${note.updated_at}</span></div>
                 </div>
@@ -960,7 +962,9 @@
                                 <h3 class="font-semibold text-sm truncate flex-1 min-w-0">${esc(note.title) || 'Untitled'}</h3>
                             </div>
                             ${pinBadge}
-                            <p class="text-xs text-muted truncate">${esc(note.content)}</p>
+                            ${note.has_password
+                                ? `<p class="text-xs text-muted truncate" style="font-style:italic;opacity:0.5;">🔒 Content is protected</p>`
+                                : `<p class="text-xs text-muted truncate">${esc(note.content)}</p>`}
                             <div class="flex items-center gap-2 mt-0.5">
                                 <div class="flex flex-wrap gap-1 flex-1 min-w-0">
                                     ${labelsList}

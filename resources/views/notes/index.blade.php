@@ -880,6 +880,14 @@
                </div>`
             : '';
 
+        // Shared indicator rendered below pinned badge
+        const shareBadge = note.is_shared
+            ? `<div class="flex items-center gap-0.5" style="margin-bottom:2px;">
+                <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
+                <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+               </div>`
+            : '';
+
         // Labels: horizontal flex-wrap below title (grid), inline list (list view)
         const labelsGridHtml = note.labels.slice(0, 3).map(l =>
             `<span class="note-label-chip" style="background-color:${l.color}">${l.name}</span>`
@@ -935,6 +943,7 @@
                     <div class="min-w-0 mb-0.5">
                         <h3 class="note-title">${esc(note.title) || 'Untitled'}</h3>
                         ${pinBadge}
+                        ${shareBadge}
                         ${labelsGridHtml ? `<div class="note-grid-labels flex flex-wrap gap-1 mt-1">${labelsGridHtml}</div>` : ''}
                     </div>
                     ${note.has_password
@@ -962,6 +971,7 @@
                                 <h3 class="font-semibold text-sm truncate flex-1 min-w-0">${esc(note.title) || 'Untitled'}</h3>
                             </div>
                             ${pinBadge}
+                            ${shareBadge}
                             ${note.has_password
                                 ? `<p class="text-xs text-muted truncate" style="font-style:italic;opacity:0.5;">🔒 Content is protected</p>`
                                 : `<p class="text-xs text-muted truncate">${esc(note.content)}</p>`}

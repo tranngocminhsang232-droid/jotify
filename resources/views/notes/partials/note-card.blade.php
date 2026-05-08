@@ -70,6 +70,12 @@
                     <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
                 </div>
                 @endif
+                @if($note->shares && $note->shares->count() > 0)
+                <div class="flex items-center gap-0.5" style="margin-bottom:2px;">
+                    <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
+                    <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+                </div>
+                @endif
                 @if($note->labels->count() > 0)
                 <div class="note-grid-labels flex flex-wrap gap-1 mt-1">
                     @foreach($note->labels->take(3) as $label)
@@ -130,6 +136,12 @@
                     <div class="pin-badge-below-title flex items-center gap-0.5" style="margin-bottom:1px;">
                         <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
                         <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
+                    </div>
+                    @endif
+                    @if($note->shares && $note->shares->count() > 0)
+                    <div class="flex items-center gap-0.5" style="margin-bottom:1px;">
+                        <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
+                        <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
                     </div>
                     @endif
                     @if($note->has_password)

@@ -127,7 +127,7 @@ class NoteController extends Controller
                     $note->title ?? '',
                     $note->content ?? '',
                     $user->display_name,
-                    $note->updated_at->format('M d, Y h:i A')
+                    $note->fresh()->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A')
                 ))->toOthers();
             }
         } catch (\Exception $e) {
@@ -136,7 +136,7 @@ class NoteController extends Controller
 
         return response()->json([
             'success' => true,
-            'updated_at' => $note->updated_at->format('M d, Y h:i A'),
+            'updated_at' => $note->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A'),
         ]);
     }
 

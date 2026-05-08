@@ -146,6 +146,19 @@
             <p class="text-xs text-muted mb-3 italic">🔒 Content is password protected</p>
             @endif
 
+            {{-- Image thumbnail (hidden when locked) --}}
+            @if(!$share->note->has_password && $share->note->images->count() > 0)
+            <div class="note-thumb-wrap" style="margin-bottom:0.5rem;">
+                <img src="{{ asset('storage/' . $share->note->images->first()->image_path) }}"
+                     alt="Attachment"
+                     class="w-full rounded-lg object-cover" style="max-height:120px;"
+                     loading="lazy">
+                @if($share->note->images->count() > 1)
+                <span class="text-[10px] text-muted">+{{ $share->note->images->count() - 1 }} more</span>
+                @endif
+            </div>
+            @endif
+
             {{-- Footer: owner info + last-modified time --}}
             <div class="flex items-center gap-2 pt-2 border-t border-border/50 mt-auto">
                 <img src="{{ $share->owner->avatar_url }}" class="w-5 h-5 rounded-full flex-shrink-0" alt="">

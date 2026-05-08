@@ -22,7 +22,7 @@ class ShareController extends Controller
     {
         $user = Auth::user();
         $sharedNotes = NoteShare::where('recipient_id', $user->id)
-            ->with(['note', 'owner'])
+            ->with(['note.images', 'owner'])
             ->get()
             // Order by note's updated_at so recently-edited notes surface first
             ->sortByDesc(fn($s) => $s->note?->updated_at ?? $s->shared_at)
@@ -259,7 +259,7 @@ class ShareController extends Controller
         if (empty($payload)) {
             return response()->json([
                 'success'    => true,
-                'updated_at' => $note->updated_at->format('M d, Y h:i A'),
+                'updated_at' => $note->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A'),
             ]);
         }
 
@@ -270,7 +270,7 @@ class ShareController extends Controller
         if ($titleEmpty && $contentEmpty && ($note->title || $note->content)) {
             return response()->json([
                 'success'    => true,
-                'updated_at' => $note->updated_at->format('M d, Y h:i A'),
+                'updated_at' => $note->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A'),
             ]);
         }
 
@@ -283,7 +283,7 @@ class ShareController extends Controller
                 $note->title ?? '',
                 $note->content ?? '',
                 $user->display_name,
-                $note->fresh()->updated_at->format('M d, Y h:i A')
+                $note->fresh()->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A')
             ))->toOthers();
         } catch (\Exception $e) {
             \Log::warning('Broadcast failed: ' . $e->getMessage());
@@ -291,7 +291,7 @@ class ShareController extends Controller
 
         return response()->json([
             'success'    => true,
-            'updated_at' => $note->fresh()->updated_at->format('M d, Y h:i A'),
+            'updated_at' => $note->fresh()->updated_at->timezone('Asia/Ho_Chi_Minh')->format('M d, Y h:i A'),
         ]);
     }
 

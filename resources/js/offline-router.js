@@ -201,6 +201,9 @@ export async function renderList() {
         </div>`;
     }
 
+    // Apply masonry layout
+    if (window.applyMasonry) window.applyMasonry(nc);
+
     // Wire up offline search
     const searchInput = container.querySelector('#offline-search-input');
     if (searchInput) {
@@ -220,6 +223,8 @@ export async function renderList() {
                         ? filtered.map(n => window.buildNoteCard(n)).join('')
                         : '<div class="col-span-full" style="text-align:center;padding:3rem;color:var(--color-muted);">No matching notes</div>';
                 }
+                // Re-apply masonry after filter
+                if (window.applyMasonry) window.applyMasonry(nc);
             }
         });
     }

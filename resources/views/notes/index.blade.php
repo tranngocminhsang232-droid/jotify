@@ -298,18 +298,16 @@
         transform: scale(1) translateY(0);
     }
 
-    /* ─── Masonry-style grid (CSS Grid + align-items:start) ─────────── */
-    /* Cards take only the height they need, reading order preserved.  */
+    /* ─── Masonry layout (JS-positioned, like Google Keep) ────────── */
+    /* Container is position:relative; JS absolutely positions each   */
+    /* card into the shortest column for a true masonry effect.       */
     .note-masonry {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-        align-items: start;
+        position: relative;
     }
-    @media (min-width: 1024px) {
-        .note-masonry {
-            grid-template-columns: repeat(3, 1fr);
-        }
+    .note-masonry > .note-card-wrapper {
+        position: absolute;
+        /* transition for smooth reflow on resize / content change */
+        transition: top 0.25s ease, left 0.25s ease, transform 0.22s cubic-bezier(0.34,1.26,0.64,1), box-shadow 0.22s ease;
     }
 
     /* ─── Note card wrapper ──────────────────────────────────────────── */
@@ -691,6 +689,8 @@
         } else {
             pill.style.transform = 'translateX(calc(100% + 2px))';
             btnList.classList.add('active'); btnGrid.classList.remove('active');
+            // Clear absolute positioning before switching to flex list
+            if (window.clearMasonry) window.clearMasonry();
             container.className = 'flex flex-col gap-2';
         }
         // Update per-card classes so CSS selectors (note-card-grid / note-card-list) apply correctly
@@ -820,6 +820,8 @@
         container.innerHTML = notes.map(note => window.buildNoteCard(note)).join('');
         // Re-init swipe gestures cho cards mới render
         if (typeof initSwipeGestures === 'function') initSwipeGestures();
+        // Apply masonry layout if in grid mode
+        if (window.applyMasonry) window.applyMasonry();
     };
 
     // ── Áp dụng thay đổi label từ editor ngay khi quay về index ─────────────
@@ -1431,6 +1433,89 @@
     };
 
     })();
+
+    // ═══════════════════════════════════════════════════════════════
+    //  MASONRY LAYOUT ENGINE — JS-based (like Google Keep / Pinterest)
+    //  Positions each card absolutely into the shortest column,
+    //  giving true masonry with correct left-to-right reading order.
+    // ═══════════════════════════════════════════════════════════════
+    window.applyMasonry = function(containerEl) {
+        const container = containerEl || document.getElementById('notes-container');
+        if (!container || !container.classList.contains('note-masonry')) return;
+
+        const wrappers = Array.from(container.querySelectorAll(':scope > .note-card-wrapper'));
+        if (wrappers.length === 0) {
+            container.style.height = '';
+            return;
+        }
+
+        const gap  = 16; // 1rem
+        const cols = window.innerWidth >= 1024 ? 3 : 2;
+        const containerWidth = container.clientWidth;
+        if (containerWidth <= 0) return; // container not visible yet
+        const colWidth = (containerWidth - gap * (cols - 1)) / cols;
+        const colHeights = new Array(cols).fill(0);
+
+        wrappers.forEach(item => {
+            // Set width so offsetHeight is calculated correctly
+            item.style.width = colWidth + 'px';
+        });
+
+        // Force reflow so heights are accurate
+        void container.offsetHeight;
+
+        wrappers.forEach(item => {
+            // Place in shortest column
+            const minH = Math.min(...colHeights);
+            const col  = colHeights.indexOf(minH);
+
+            item.style.left = (col * (colWidth + gap)) + 'px';
+            item.style.top  = colHeights[col] + 'px';
+
+            colHeights[col] += item.offsetHeight + gap;
+        });
+
+        container.style.height = (Math.max(...colHeights) - gap) + 'px';
+
+        // Re-apply when images inside cards finish loading (changes card height)
+        wrappers.forEach(item => {
+            item.querySelectorAll('img').forEach(img => {
+                if (!img.complete && !img._masonryBound) {
+                    img._masonryBound = true;
+                    img.addEventListener('load', () => {
+                        img._masonryBound = false;
+                        window.applyMasonry(container);
+                    }, { once: true });
+                }
+            });
+        });
+    };
+
+    window.clearMasonry = function() {
+        const container = document.getElementById('notes-container');
+        if (!container) return;
+        container.style.height = '';
+        container.querySelectorAll(':scope > .note-card-wrapper').forEach(item => {
+            item.style.position = '';
+            item.style.width    = '';
+            item.style.left     = '';
+            item.style.top      = '';
+        });
+    };
+
+    // Debounced resize handler
+    let _masonryResizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_masonryResizeTimer);
+        _masonryResizeTimer = setTimeout(() => window.applyMasonry(), 150);
+    });
+
+    // Initial masonry on page load (server-rendered cards)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(() => window.applyMasonry(), 50));
+    } else {
+        setTimeout(() => window.applyMasonry(), 50);
+    }
 
     // â”€â”€â”€ Session: password_required redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     @if(session('password_required'))

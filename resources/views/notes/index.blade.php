@@ -298,23 +298,18 @@
         transform: scale(1) translateY(0);
     }
 
-    /* ─── Masonry grid layout (CSS Columns) ────────────────────────────── */
+    /* ─── Masonry-style grid (CSS Grid + align-items:start) ─────────── */
+    /* Cards take only the height they need, reading order preserved.  */
     .note-masonry {
-        column-count: 2;
-        column-gap: 1rem;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        align-items: start;
     }
     @media (min-width: 1024px) {
         .note-masonry {
-            column-count: 3;
+            grid-template-columns: repeat(3, 1fr);
         }
-    }
-    .note-masonry > .note-card-wrapper {
-        break-inside: avoid;
-        margin-bottom: 1rem;
-    }
-    /* Empty / no-results state inside masonry: span all columns */
-    .note-masonry > .col-span-full {
-        column-span: all;
     }
 
     /* ─── Note card wrapper ──────────────────────────────────────────── */

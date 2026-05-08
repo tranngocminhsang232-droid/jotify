@@ -240,7 +240,7 @@
 @endif
 
 {{-- Notes container --}}
-<div id="notes-container" class="{{ $preferences->view_mode === 'grid' ? 'note-masonry' : 'flex flex-col gap-2' }}">
+<div id="notes-container" class="{{ $preferences->view_mode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'flex flex-col gap-2' }}">
     @forelse($notes as $note)
     @include('notes.partials.note-card', ['note' => $note, 'viewMode' => $preferences->view_mode])
     @empty
@@ -298,17 +298,7 @@
         transform: scale(1) translateY(0);
     }
 
-    /* ─── Masonry layout (JS-positioned, like Google Keep) ────────── */
-    /* Container is position:relative; JS absolutely positions each   */
-    /* card into the shortest column for a true masonry effect.       */
-    .note-masonry {
-        position: relative;
-    }
-    .note-masonry > .note-card-wrapper {
-        position: absolute;
-        /* transition for smooth reflow on resize / content change */
-        transition: top 0.25s ease, left 0.25s ease, transform 0.22s cubic-bezier(0.34,1.26,0.64,1), box-shadow 0.22s ease;
-    }
+
 
     /* ─── Note card wrapper ──────────────────────────────────────────── */
     .note-card-wrapper {
@@ -335,13 +325,13 @@
     }
     /* Grid hover: zoom + lift — chỉ áp dụng khi có chuột thực (không phải touch) */
     @media (hover: hover) {
-        .note-masonry .note-card-wrapper:hover {
+        #notes-container.grid .note-card-wrapper:hover {
             transform: scale(1.03) translateY(-2px);
             box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.1);
             z-index: 10;
         }
         /* List hover: zoom nhẹ hơn + lift */
-        #notes-container:not(.note-masonry) .note-card-wrapper:hover {
+        #notes-container:not(.grid) .note-card-wrapper:hover {
             transform: scale(1.015) translateY(-1px);
             box-shadow: 0 6px 24px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
             z-index: 10;
@@ -368,6 +358,7 @@
         display: flex;
         flex-direction: column;
         padding: 1rem 1rem 0.875rem;
+        min-height: 150px;
         background: var(--color-card);
         border-radius: 0.875rem;
         border: 1px solid var(--color-border);
@@ -379,7 +370,7 @@
         outline-offset: -2px;
     }
     @media (hover: hover) {
-        .note-masonry .note-card-wrapper:hover .note-card-grid {
+        .note-card-wrapper:hover .note-card-grid {
             border-color: rgba(34,197,94,0.35);
             background: var(--color-card);
         }
@@ -685,12 +676,10 @@
         if (mode === 'grid') {
             pill.style.transform = 'translateX(0px)';
             btnGrid.classList.add('active'); btnList.classList.remove('active');
-            container.className = 'note-masonry';
+            container.className = 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4';
         } else {
             pill.style.transform = 'translateX(calc(100% + 2px))';
             btnList.classList.add('active'); btnGrid.classList.remove('active');
-            // Clear absolute positioning before switching to flex list
-            if (window.clearMasonry) window.clearMasonry();
             container.className = 'flex flex-col gap-2';
         }
         // Update per-card classes so CSS selectors (note-card-grid / note-card-list) apply correctly
@@ -820,8 +809,6 @@
         container.innerHTML = notes.map(note => window.buildNoteCard(note)).join('');
         // Re-init swipe gestures cho cards mới render
         if (typeof initSwipeGestures === 'function') initSwipeGestures();
-        // Apply masonry layout if in grid mode
-        if (window.applyMasonry) window.applyMasonry();
     };
 
     // ── Áp dụng thay đổi label từ editor ngay khi quay về index ─────────────
@@ -874,7 +861,7 @@
     }
 
     window.buildNoteCard = function(note) {
-        const isGrid    = document.getElementById('notes-container')?.classList.contains('note-masonry');
+        const isGrid    = document.getElementById('notes-container')?.classList.contains('grid');
         const borderTop = note.note_color && note.note_color !== 'none' ? `border-top:3px solid ${note.note_color};` : '';
         const hp        = note.has_password ? 'true' : 'false';
         const pinned    = note.is_pinned ? '1' : '0';
@@ -1434,88 +1421,6 @@
 
     })();
 
-    // ═══════════════════════════════════════════════════════════════
-    //  MASONRY LAYOUT ENGINE — JS-based (like Google Keep / Pinterest)
-    //  Positions each card absolutely into the shortest column,
-    //  giving true masonry with correct left-to-right reading order.
-    // ═══════════════════════════════════════════════════════════════
-    window.applyMasonry = function(containerEl) {
-        const container = containerEl || document.getElementById('notes-container');
-        if (!container || !container.classList.contains('note-masonry')) return;
-
-        const wrappers = Array.from(container.querySelectorAll(':scope > .note-card-wrapper'));
-        if (wrappers.length === 0) {
-            container.style.height = '';
-            return;
-        }
-
-        const gap  = 16; // 1rem
-        const cols = window.innerWidth >= 1024 ? 3 : 2;
-        const containerWidth = container.clientWidth;
-        if (containerWidth <= 0) return; // container not visible yet
-        const colWidth = (containerWidth - gap * (cols - 1)) / cols;
-        const colHeights = new Array(cols).fill(0);
-
-        wrappers.forEach(item => {
-            // Set width so offsetHeight is calculated correctly
-            item.style.width = colWidth + 'px';
-        });
-
-        // Force reflow so heights are accurate
-        void container.offsetHeight;
-
-        wrappers.forEach(item => {
-            // Place in shortest column
-            const minH = Math.min(...colHeights);
-            const col  = colHeights.indexOf(minH);
-
-            item.style.left = (col * (colWidth + gap)) + 'px';
-            item.style.top  = colHeights[col] + 'px';
-
-            colHeights[col] += item.offsetHeight + gap;
-        });
-
-        container.style.height = (Math.max(...colHeights) - gap) + 'px';
-
-        // Re-apply when images inside cards finish loading (changes card height)
-        wrappers.forEach(item => {
-            item.querySelectorAll('img').forEach(img => {
-                if (!img.complete && !img._masonryBound) {
-                    img._masonryBound = true;
-                    img.addEventListener('load', () => {
-                        img._masonryBound = false;
-                        window.applyMasonry(container);
-                    }, { once: true });
-                }
-            });
-        });
-    };
-
-    window.clearMasonry = function() {
-        const container = document.getElementById('notes-container');
-        if (!container) return;
-        container.style.height = '';
-        container.querySelectorAll(':scope > .note-card-wrapper').forEach(item => {
-            item.style.position = '';
-            item.style.width    = '';
-            item.style.left     = '';
-            item.style.top      = '';
-        });
-    };
-
-    // Debounced resize handler
-    let _masonryResizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(_masonryResizeTimer);
-        _masonryResizeTimer = setTimeout(() => window.applyMasonry(), 150);
-    });
-
-    // Initial masonry on page load (server-rendered cards)
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setTimeout(() => window.applyMasonry(), 50));
-    } else {
-        setTimeout(() => window.applyMasonry(), 50);
-    }
 
     // â”€â”€â”€ Session: password_required redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     @if(session('password_required'))

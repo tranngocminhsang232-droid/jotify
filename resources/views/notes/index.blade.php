@@ -1223,10 +1223,17 @@
             }
             window.closePasswordModal();
             if (action === 'edit') {
-                const url = `/notes/${noteId}/edit`;
-                if (!navigator.onLine) location.href = url;
-                else if (window.ajaxNav) window.ajaxNav(url);
-                else location.href = url;
+                if (!navigator.onLine) {
+                    if (window.offlineRouter) {
+                        window.offlineRouter.navigateToNote(noteId);
+                    } else {
+                        location.href = `/notes/${noteId}/edit`;
+                    }
+                } else if (window.ajaxNav) {
+                    window.ajaxNav(`/notes/${noteId}/edit`);
+                } else {
+                    location.href = `/notes/${noteId}/edit`;
+                }
             } else if (action === 'delete') {
                 window.showDeleteModal(noteId);
             }

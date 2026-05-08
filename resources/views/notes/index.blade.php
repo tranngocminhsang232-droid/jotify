@@ -240,7 +240,7 @@
 @endif
 
 {{-- Notes container --}}
-<div id="notes-container" class="{{ $preferences->view_mode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'flex flex-col gap-2' }}">
+<div id="notes-container" class="{{ $preferences->view_mode === 'grid' ? 'note-masonry' : 'flex flex-col gap-2' }}">
     @forelse($notes as $note)
     @include('notes.partials.note-card', ['note' => $note, 'viewMode' => $preferences->view_mode])
     @empty
@@ -298,6 +298,25 @@
         transform: scale(1) translateY(0);
     }
 
+    /* ─── Masonry grid layout (CSS Columns) ────────────────────────────── */
+    .note-masonry {
+        column-count: 2;
+        column-gap: 1rem;
+    }
+    @media (min-width: 1024px) {
+        .note-masonry {
+            column-count: 3;
+        }
+    }
+    .note-masonry > .note-card-wrapper {
+        break-inside: avoid;
+        margin-bottom: 1rem;
+    }
+    /* Empty / no-results state inside masonry: span all columns */
+    .note-masonry > .col-span-full {
+        column-span: all;
+    }
+
     /* ─── Note card wrapper ──────────────────────────────────────────── */
     .note-card-wrapper {
         position: relative;
@@ -323,13 +342,13 @@
     }
     /* Grid hover: zoom + lift — chỉ áp dụng khi có chuột thực (không phải touch) */
     @media (hover: hover) {
-        #notes-container.grid .note-card-wrapper:hover {
+        .note-masonry .note-card-wrapper:hover {
             transform: scale(1.03) translateY(-2px);
             box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.1);
             z-index: 10;
         }
         /* List hover: zoom nhẹ hơn + lift */
-        #notes-container:not(.grid) .note-card-wrapper:hover {
+        #notes-container:not(.note-masonry) .note-card-wrapper:hover {
             transform: scale(1.015) translateY(-1px);
             box-shadow: 0 6px 24px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
             z-index: 10;
@@ -356,7 +375,6 @@
         display: flex;
         flex-direction: column;
         padding: 1rem 1rem 0.875rem;
-        min-height: 150px;
         background: var(--color-card);
         border-radius: 0.875rem;
         border: 1px solid var(--color-border);
@@ -368,7 +386,7 @@
         outline-offset: -2px;
     }
     @media (hover: hover) {
-        .note-card-wrapper:hover .note-card-grid {
+        .note-masonry .note-card-wrapper:hover .note-card-grid {
             border-color: rgba(34,197,94,0.35);
             background: var(--color-card);
         }
@@ -674,7 +692,7 @@
         if (mode === 'grid') {
             pill.style.transform = 'translateX(0px)';
             btnGrid.classList.add('active'); btnList.classList.remove('active');
-            container.className = 'grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+            container.className = 'note-masonry';
         } else {
             pill.style.transform = 'translateX(calc(100% + 2px))';
             btnList.classList.add('active'); btnGrid.classList.remove('active');
@@ -859,7 +877,7 @@
     }
 
     window.buildNoteCard = function(note) {
-        const isGrid    = document.getElementById('notes-container')?.classList.contains('grid');
+        const isGrid    = document.getElementById('notes-container')?.classList.contains('note-masonry');
         const borderTop = note.note_color && note.note_color !== 'none' ? `border-top:3px solid ${note.note_color};` : '';
         const hp        = note.has_password ? 'true' : 'false';
         const pinned    = note.is_pinned ? '1' : '0';

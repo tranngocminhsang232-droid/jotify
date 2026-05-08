@@ -159,9 +159,9 @@ export async function renderList() {
     restoreHeaderForList();
 
     // ★ Render the skeleton FIRST so #notes-container exists in the DOM.
-    // buildNoteCard() uses getElementById('notes-container') to detect grid vs list mode.
+    // buildNoteCard() uses getElementById('notes-container') to detect masonry vs list mode.
     // If we build cards before the container is in the DOM, it can't find the element
-    // and falls back to list-mode cards inside a grid container — breaking layout.
+    // and falls back to list-mode cards inside a masonry container — breaking layout.
     container.innerHTML = `
     <!-- Offline banner -->
     <div style="display:flex;align-items:center;gap:0.5rem;padding:0.625rem 1rem;border-radius:0.75rem;margin-bottom:1rem;font-size:0.8rem;font-weight:500;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;">
@@ -178,7 +178,7 @@ export async function renderList() {
     </div>
 
     <!-- Notes grid -->
-    <div id="notes-container" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div id="notes-container" class="note-masonry">
     </div>`;
 
     // NOW build cards — #notes-container is in the DOM so buildNoteCard can detect grid mode

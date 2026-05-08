@@ -1451,6 +1451,7 @@
                 'labels'          => $n->labels->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values()->toArray(),
                 'first_image_url' => $n->images->count() > 0 ? asset('storage/' . $n->images->first()->image_path) : null,
                 'updated_at'      => $n->updated_at?->diffForHumans() ?? '',
+                'updated_at_ts'   => $n->updated_at?->timestamp ?? 0,
                 'created_at_ts'   => $n->created_at?->timestamp ?? 0,
             ];
         })->values();

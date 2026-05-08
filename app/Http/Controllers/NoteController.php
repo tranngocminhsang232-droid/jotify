@@ -50,6 +50,7 @@ class NoteController extends Controller
                         'is_shared'      => $note->shares->count() > 0,
                         'labels'         => $note->labels,
                         'updated_at'     => $note->updated_at->diffForHumans(),
+                        'updated_at_ts'  => $note->updated_at->timestamp,
                         'created_at_ts'  => $note->created_at->timestamp,
                         'pinned_at_ts'   => $note->pinned_at?->timestamp ?? 0,
                         'first_image_url'=> $note->images->first()

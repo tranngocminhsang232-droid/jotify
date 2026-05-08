@@ -245,6 +245,7 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                     labels:          note.labels            ?? [],
                     first_image_url: note.first_image_url  ?? null,
                     updated_at:      note.updated_at        ?? '',
+                    updated_at_ts:   note.updated_at_ts     ?? note.created_at_ts ?? 0,
                     created_at_ts:   note.created_at_ts     ?? 0,
                     syncStatus:      'synced',
                 });
@@ -271,9 +272,12 @@ export async function getNotesFromIDB() {
         const notes = await db.getAll(STORE_NOTES);
         notes.sort((a, b) => {
             if (b.is_pinned !== a.is_pinned) return b.is_pinned ? 1 : -1;
-            // Sort by most recently edited: _localEditedAt (ms) > created_at_ts (seconds)
-            const aTime = a._localEditedAt || (a.created_at_ts * 1000) || 0;
-            const bTime = b._localEditedAt || (b.created_at_ts * 1000) || 0;
+            // Sort by most recently updated:
+            //   _localEditedAt (ms) — set by offline editor
+            //   updated_at_ts (s)   — set by server merge
+            //   created_at_ts (s)   — fallback
+            const aTime = a._localEditedAt || (a.updated_at_ts || a.created_at_ts || 0) * 1000;
+            const bTime = b._localEditedAt || (b.updated_at_ts || b.created_at_ts || 0) * 1000;
             return bTime - aTime;
         });
         return notes;

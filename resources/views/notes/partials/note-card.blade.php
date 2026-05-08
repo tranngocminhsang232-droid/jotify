@@ -36,7 +36,7 @@
     <div id="note-card-{{ $note->id }}"
          data-pinned="{{ $note->is_pinned ? '1' : '0' }}"
          data-has-password="{{ $note->has_password ? 'true' : 'false' }}"
-         data-note-ts="{{ $note->created_at->timestamp }}"
+         data-note-ts="{{ $note->updated_at->timestamp }}"
          data-pinned-at="{{ $note->pinned_at?->timestamp ?? 0 }}"
          @if($note->note_color && $note->note_color !== 'none')
              style="border-top: 3px solid {{ $note->note_color }};"

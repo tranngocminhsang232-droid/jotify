@@ -933,7 +933,7 @@
                 ${hoverActions}
                 <div id="note-card-${note.id}" class="note-card-inner note-card-grid"
                      data-pinned="${pinned}" data-has-password="${hp}"
-                     data-note-ts="${note.created_at_ts || note.id}"
+                     data-note-ts="${note.updated_at_ts || note.created_at_ts || note.id}"
                      data-pinned-at="${note.pinned_at_ts || 0}"
                      style="${borderTop}"
                      onclick="editNote(${note.id},${hp})" role="button" tabindex="0">
@@ -957,7 +957,7 @@
                 ${hoverActions}
                 <div id="note-card-${note.id}" class="note-card-inner note-card-list"
                      data-pinned="${pinned}" data-has-password="${hp}"
-                     data-note-ts="${note.created_at_ts || note.id}"
+                     data-note-ts="${note.updated_at_ts || note.created_at_ts || note.id}"
                      data-pinned-at="${note.pinned_at_ts || 0}"
                      style="${borderTop}"
                      onclick="editNote(${note.id},${hp})" role="button" tabindex="0">

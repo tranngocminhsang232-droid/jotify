@@ -6,15 +6,30 @@
 
 ## Mục lục
 
-1. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-2. [Cài đặt XAMPP](#cài-đặt-xampp)
-3. [Cài đặt Composer & Node.js](#cài-đặt-composer--nodejs)
-4. [Hướng dẫn cài đặt dự án](#hướng-dẫn-cài-đặt-dự-án)
-5. [Cấu hình môi trường (.env)](#cấu-hình-môi-trường-env)
-6. [Tạo database & import dữ liệu](#tạo-database--import-dữ-liệu)
-7. [Chạy dự án](#chạy-dự-án)
-8. [Các lỗi phổ biến & Cách khắc phục](#các-lỗi-phổ-biến--cách-khắc-phục)
-9. [Thông tin bổ sung](#thông-tin-bổ-sung)
+1. [Demo Online & Tài khoản Test](#demo-online--tài-khoản-test)
+2. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+3. [Cài đặt XAMPP](#cài-đặt-xampp)
+4. [Cài đặt Composer & Node.js](#cài-đặt-composer--nodejs)
+5. [Hướng dẫn cài đặt dự án](#hướng-dẫn-cài-đặt-dự-án)
+6. [Cấu hình môi trường (.env)](#cấu-hình-môi-trường-env)
+7. [Tạo database](#tạo-database)
+8. [Chạy dự án](#chạy-dự-án)
+9. [Các lỗi phổ biến & Cách khắc phục](#các-lỗi-phổ-biến--cách-khắc-phục)
+10. [Thông tin bổ sung](#thông-tin-bổ-sung)
+
+---
+
+## Demo Online & Tài khoản Test
+
+🌐 **URL Production:** [https://jotify-production-1dd9.up.railway.app](https://jotify-production-1dd9.up.railway.app)
+
+| Thông tin | Giá trị |
+|---|---|
+| **URL** | https://jotify-production-1dd9.up.railway.app |
+| **Email** | tranngocminhsang232@gmail.com |
+| **Mật khẩu** | 123456 |
+
+> Bạn cũng có thể tự đăng ký tài khoản mới trên hệ thống.
 
 ---
 
@@ -160,9 +175,7 @@ php artisan key:generate
 
 ---
 
-## Tạo database & import dữ liệu
-
-### Cách 1: Tạo database mới (trống)
+## Tạo database
 
 1. Mở trình duyệt → truy cập **phpMyAdmin**: [http://localhost/phpmyadmin](http://localhost/phpmyadmin)
 2. Nhấn **"New"** (hoặc "Mới") ở sidebar trái.
@@ -171,16 +184,7 @@ php artisan key:generate
    ```bash
    php artisan migrate
    ```
-   *(Lệnh này sẽ tạo tất cả các bảng cần thiết)*
-
-### Cách 2: Import từ file SQL (có sẵn dữ liệu mẫu)
-
-1. Mở **phpMyAdmin** → tạo database `ckweb2` như Cách 1.
-2. Chọn database `ckweb2` → vào tab **"Import"**.
-3. Nhấn **"Choose File"** → chọn file `database/CKWeb2_dump.sql` trong thư mục dự án.
-4. Nhấn **"Go"** / **"Thực hiện"** để import.
-
-> **Lưu ý:** Nếu dùng Cách 2, **không cần** chạy `php artisan migrate` nữa vì file SQL đã chứa đầy đủ cấu trúc bảng.
+   *(Lệnh này sẽ tạo tất cả các bảng cần thiết từ 10 file migration)*
 
 ---
 
@@ -325,9 +329,9 @@ Sau đó truy cập: `http://localhost:8001`
 
 ### 7. Lỗi "SQLSTATE[42S01] Table already exists" khi chạy migrate
 
-**Nguyên nhân:** Đã import file SQL trước rồi mới chạy migrate.
+**Nguyên nhân:** Database đã có bảng từ lần migrate trước.
 
-**Cách sửa:** Nếu đã import từ file `CKWeb2_dump.sql`, **không cần** chạy `php artisan migrate`. Nếu muốn reset lại:
+**Cách sửa:** Nếu muốn reset lại toàn bộ database:
 ```bash
 php artisan migrate:fresh
 ```
@@ -415,8 +419,7 @@ CKWeb2/
 ├── config/                 # Cấu hình ứng dụng
 ├── database/
 │   ├── migrations/         # File migration tạo bảng
-│   ├── seeders/            # Dữ liệu mẫu
-│   └── CKWeb2_dump.sql     # File SQL backup (import phpMyAdmin)
+│   └── seeders/            # Dữ liệu mẫu
 ├── public/                 # Entry point (index.php, assets đã build)
 ├── resources/
 │   ├── css/                # Source CSS (Tailwind)
@@ -430,9 +433,24 @@ CKWeb2/
 └── vite.config.js          # Cấu hình Vite build
 ```
 
-### Tài khoản mặc định (nếu import từ SQL dump)
+### Tài khoản test
 
-Nếu bạn import file `CKWeb2_dump.sql`, dữ liệu có sẵn trong database. Bạn có thể đăng ký tài khoản mới hoặc sử dụng tài khoản có trong database (nếu có).
+| Thông tin | Giá trị |
+|---|---|
+| **Email** | tranngocminhsang232@gmail.com |
+| **Mật khẩu** | 123456 |
+
+Bạn cũng có thể tự đăng ký tài khoản mới trên hệ thống.
+
+### Deploy Online
+
+Ứng dụng đã được deploy trên **Railway** tại:
+
+🌐 **https://jotify-production-1dd9.up.railway.app**
+
+Cấu hình deploy:
+- `nixpacks.toml` — Build config (PHP 8.3, Node 22, Composer, npm build)
+- `railway-deploy.sh` — Post-deploy script (migrate, storage:link, cache:clear)
 
 ---
 

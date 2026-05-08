@@ -449,6 +449,16 @@ export async function updateNoteOfflineFirst(noteId, data) {
                 noteId, title: data.title || '', content: data.content || '',
                 queued_at: Date.now(),
             });
+        } else {
+            // For temp notes: update STORE_CREATES so syncAllPending sends latest content
+            const pendingCreate = await db.get(STORE_CREATES, String(noteId));
+            if (pendingCreate) {
+                await db.put(STORE_CREATES, {
+                    ...pendingCreate,
+                    title:   data.title   ?? pendingCreate.title   ?? '',
+                    content: data.content ?? pendingCreate.content ?? '',
+                });
+            }
         }
     } catch (e) {
         console.warn('[IDB] updateNoteOfflineFirst failed:', e);
@@ -502,6 +512,13 @@ export async function syncAllPending(csrfToken) {
                 const data = await res.json().catch(() => ({}));
                 const newId = data.id;
                 if (newId) {
+                    // Read the LATEST content from STORE_NOTES (source of truth)
+                    // STORE_CREATES may have stale data if user edited after create
+                    const db = await getDB();
+                    const latestNote = await db.get(STORE_NOTES, item.tempId);
+                    const syncTitle   = latestNote?.title   ?? item.title   ?? '';
+                    const syncContent = latestNote?.content ?? item.content ?? '';
+
                     // Push the offline content to the new server note
                     await fetch(`/notes/${newId}/auto-save`, {
                         method: 'PUT',
@@ -510,26 +527,25 @@ export async function syncAllPending(csrfToken) {
                             'X-CSRF-TOKEN': csrfToken,
                         },
                         body: JSON.stringify({
-                            title:   item.title   || '',
-                            content: item.content || '',
+                            title:   syncTitle,
+                            content: syncContent,
                         }),
                     });
 
                     // ★ ATOMIC: delete tempId + insert realId in ONE transaction
                     // Prevents note loss if a failure occurs mid-operation.
-                    const db = await getDB();
                     const tx = db.transaction(STORE_NOTES, 'readwrite');
                     await tx.store.delete(item.tempId);
                     await tx.store.put({
                         id:            newId,
-                        title:         item.title   || '',
-                        content:       item.content || '',
-                        note_color:    'none',
-                        is_pinned:     false,
+                        title:         syncTitle,
+                        content:       syncContent,
+                        note_color:    latestNote?.note_color  ?? 'none',
+                        is_pinned:     latestNote?.is_pinned   ?? false,
                         has_password:  false,
                         note_password: null,
                         is_shared:     false,
-                        labels:        [],
+                        labels:        latestNote?.labels      ?? [],
                         updated_at:    'Just now',
                         created_at_ts: item.created_at_ts || Math.floor(Date.now() / 1000),
                         syncStatus:    'synced',

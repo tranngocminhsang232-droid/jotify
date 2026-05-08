@@ -1188,7 +1188,8 @@
     };
     window.unlockNote = async function(e) {
         e.preventDefault();
-        const noteId   = document.getElementById('unlock-note-id')?.value;
+        const noteIdRaw = document.getElementById('unlock-note-id')?.value;
+        const noteId   = /^\d+$/.test(noteIdRaw) ? parseInt(noteIdRaw, 10) : noteIdRaw;
         const password = document.getElementById('unlock-password')?.value;
         const action   = document.getElementById('unlock-action')?.value;
         const errEl    = document.getElementById('unlock-error');

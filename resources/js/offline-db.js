@@ -411,8 +411,15 @@ export async function createNoteOfflineFirst(data = {}) {
 export async function updateNoteOfflineFirst(noteId, data) {
     try {
         const db = await getDB();
-        const existing = await db.get(STORE_NOTES, noteId) ||
-                         await db.get(STORE_NOTES, String(noteId));
+        // Robust lookup: try the given key, then numeric, then string
+        let existing = await db.get(STORE_NOTES, noteId);
+        if (!existing && typeof noteId === 'string' && /^\d+$/.test(noteId)) {
+            existing = await db.get(STORE_NOTES, Number(noteId));
+            if (existing) noteId = Number(noteId); // use the correct key type
+        }
+        if (!existing) {
+            existing = await db.get(STORE_NOTES, String(noteId));
+        }
         if (!existing) {
             // Note not in IDB — create it
             await db.put(STORE_NOTES, {

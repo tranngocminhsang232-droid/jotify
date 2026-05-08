@@ -271,7 +271,10 @@ export async function getNotesFromIDB() {
         const notes = await db.getAll(STORE_NOTES);
         notes.sort((a, b) => {
             if (b.is_pinned !== a.is_pinned) return b.is_pinned ? 1 : -1;
-            return b.created_at_ts - a.created_at_ts;
+            // Sort by most recently edited: _localEditedAt (ms) > created_at_ts (seconds)
+            const aTime = a._localEditedAt || (a.created_at_ts * 1000) || 0;
+            const bTime = b._localEditedAt || (b.created_at_ts * 1000) || 0;
+            return bTime - aTime;
         });
         return notes;
     } catch (e) {

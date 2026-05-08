@@ -124,7 +124,9 @@ export async function navigateToList() {
 
     // SPA navigation — instant back with updated content from IDB
     history.pushState({}, '', '/notes');
-    if (!_stateLoaded) await loadNotesState();
+    // Always reload from IDB so notes are sorted by updated_at
+    // (the editor updates IDB but the in-memory array order is stale)
+    await loadNotesState();
     await renderList();
 }
 

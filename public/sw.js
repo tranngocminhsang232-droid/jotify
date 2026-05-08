@@ -16,8 +16,8 @@
  * ──────────────────────────────────────────────────────────
  */
 
-const CACHE_VER   = 'jotify-v21';
-const ASSET_CACHE = 'jotify-assets-v21';
+const CACHE_VER   = 'jotify-v22';
+const ASSET_CACHE = 'jotify-assets-v22';
 
 // ── Only pre-cache static files that DON'T require authentication ────────────
 const PRECACHE_URLS = [

@@ -158,27 +158,10 @@ export async function renderList() {
     // Restore header to list mode
     restoreHeaderForList();
 
-    // Build the list HTML
-    let cardsHTML = '';
-    if (notes.length > 0 && typeof window.buildNoteCard === 'function') {
-        cardsHTML = notes.map(n => window.buildNoteCard(n)).join('');
-    } else if (notes.length > 0) {
-        // Fallback if buildNoteCard not available
-        cardsHTML = notes.map(n => buildSimpleCard(n)).join('');
-    }
-
-    const emptyHTML = notes.length === 0 ? `
-    <div class="col-span-full" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5rem 1rem;text-align:center;">
-        <div style="width:6rem;height:6rem;border-radius:1.5rem;display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;background:var(--accent-subtle,rgba(34,197,94,0.15));">
-            <span class="material-icons-outlined" style="font-size:3rem;color:var(--accent-dim,#16a34a);opacity:0.6;">note_add</span>
-        </div>
-        <h3 style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;">No notes cached</h3>
-        <p style="color:var(--color-muted);font-size:0.875rem;margin:0 0 1.5rem;">Visit your notes while online to cache them for offline use.</p>
-        <button onclick="window.offlineRouter.createNoteOffline()" class="btn-primary">
-            <span class="material-icons-outlined">add</span> Create Note
-        </button>
-    </div>` : '';
-
+    // ★ Render the skeleton FIRST so #notes-container exists in the DOM.
+    // buildNoteCard() uses getElementById('notes-container') to detect grid vs list mode.
+    // If we build cards before the container is in the DOM, it can't find the element
+    // and falls back to list-mode cards inside a grid container — breaking layout.
     container.innerHTML = `
     <!-- Offline banner -->
     <div style="display:flex;align-items:center;gap:0.5rem;padding:0.625rem 1rem;border-radius:0.75rem;margin-bottom:1rem;font-size:0.8rem;font-weight:500;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;">
@@ -196,8 +179,27 @@ export async function renderList() {
 
     <!-- Notes grid -->
     <div id="notes-container" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        ${cardsHTML}${emptyHTML}
     </div>`;
+
+    // NOW build cards — #notes-container is in the DOM so buildNoteCard can detect grid mode
+    const nc = container.querySelector('#notes-container');
+    if (notes.length > 0 && typeof window.buildNoteCard === 'function') {
+        nc.innerHTML = notes.map(n => window.buildNoteCard(n)).join('');
+    } else if (notes.length > 0) {
+        nc.innerHTML = notes.map(n => buildSimpleCard(n)).join('');
+    } else {
+        nc.innerHTML = `
+        <div class="col-span-full" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5rem 1rem;text-align:center;">
+            <div style="width:6rem;height:6rem;border-radius:1.5rem;display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;background:var(--accent-subtle,rgba(34,197,94,0.15));">
+                <span class="material-icons-outlined" style="font-size:3rem;color:var(--accent-dim,#16a34a);opacity:0.6;">note_add</span>
+            </div>
+            <h3 style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;">No notes cached</h3>
+            <p style="color:var(--color-muted);font-size:0.875rem;margin:0 0 1.5rem;">Visit your notes while online to cache them for offline use.</p>
+            <button onclick="window.offlineRouter.createNoteOffline()" class="btn-primary">
+                <span class="material-icons-outlined">add</span> Create Note
+            </button>
+        </div>`;
+    }
 
     // Wire up offline search
     const searchInput = container.querySelector('#offline-search-input');

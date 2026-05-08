@@ -866,26 +866,24 @@
         const hp        = note.has_password ? 'true' : 'false';
         const pinned    = note.is_pinned ? '1' : '0';
 
-        // statusIcons: lock + share only — pin is shown below the title
-        const statusIcons = [
-            note.has_password ? `<span class="material-icons-outlined" style="font-size:13px;color:#ef4444;" title="Protected">lock</span>` : '',
-            note.is_shared    ? `<span class="material-icons-outlined" style="font-size:13px;color:#3b82f6;" title="Shared">share</span>` : '',
-        ].filter(Boolean).join('');
+        // statusIcons: lock only
+        const statusIcons = note.has_password ? `<span class="material-icons-outlined" style="font-size:13px;color:#ef4444;" title="Protected">lock</span>` : '';
 
-        // Pin indicator rendered below the title
-        const pinBadge = note.is_pinned
-            ? `<div class="pin-badge-below-title flex items-center gap-0.5" style="margin-bottom:2px;">
+        // Combined pinned + shared badges (inline, same row)
+        const pinPart = note.is_pinned
+            ? `<div class="flex items-center gap-0.5">
                 <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
                 <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
                </div>`
             : '';
-
-        // Shared indicator rendered below pinned badge
-        const shareBadge = note.is_shared
-            ? `<div class="flex items-center gap-0.5" style="margin-bottom:2px;">
+        const sharePart = note.is_shared
+            ? `<div class="flex items-center gap-0.5">
                 <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
                 <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
                </div>`
+            : '';
+        const badgesRow = (pinPart || sharePart)
+            ? `<div class="flex items-center gap-2" style="margin-bottom:2px;">${pinPart}${sharePart}</div>`
             : '';
 
         // Labels: horizontal flex-wrap below title (grid), inline list (list view)
@@ -942,8 +940,7 @@
                     ${statusIcons ? `<div class="flex items-center gap-1 mb-1">${statusIcons}</div>` : ''}
                     <div class="min-w-0 mb-0.5">
                         <h3 class="note-title">${esc(note.title) || 'Untitled'}</h3>
-                        ${pinBadge}
-                        ${shareBadge}
+                        ${badgesRow}
                         ${labelsGridHtml ? `<div class="note-grid-labels flex flex-wrap gap-1 mt-1">${labelsGridHtml}</div>` : ''}
                     </div>
                     ${note.has_password
@@ -970,8 +967,7 @@
                             <div class="flex items-center gap-2 min-w-0">
                                 <h3 class="font-semibold text-sm truncate flex-1 min-w-0">${esc(note.title) || 'Untitled'}</h3>
                             </div>
-                            ${pinBadge}
-                            ${shareBadge}
+                            ${badgesRow}
                             ${note.has_password
                                 ? `<p class="text-xs text-muted truncate" style="font-style:italic;opacity:0.5;">🔒 Content is protected</p>`
                                 : `<p class="text-xs text-muted truncate">${esc(note.content)}</p>`}

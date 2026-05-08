@@ -49,31 +49,30 @@
 
         @if($viewMode === 'grid')
         {{-- ════ GRID content ════ --}}
-            {{-- Status icons row (lock + share only — pin moved below title) --}}
-            @if($note->has_password || ($note->shares && $note->shares->count() > 0))
+            {{-- Status icons row (lock only) --}}
+            @if($note->has_password)
             <div class="flex items-center gap-1 mb-1">
-                @if($note->has_password)
                 <span class="material-icons-outlined" style="font-size:13px;color:#ef4444;" title="Protected">lock</span>
-                @endif
-                @if($note->shares && $note->shares->count() > 0)
-                <span class="material-icons-outlined" style="font-size:13px;color:#3b82f6;" title="Shared">share</span>
-                @endif
             </div>
             @endif
 
-            {{-- Title + pin badge + labels (all inline, no side column) --}}
+            {{-- Title + pin/shared badges + labels --}}
             <div class="min-w-0 mb-0.5">
                 <h3 class="note-title">{{ $note->title ?: 'Untitled' }}</h3>
-                @if($note->is_pinned)
-                <div class="pin-badge-below-title flex items-center gap-0.5" style="margin-bottom:2px;">
-                    <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
-                    <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
-                </div>
-                @endif
-                @if($note->shares && $note->shares->count() > 0)
-                <div class="flex items-center gap-0.5" style="margin-bottom:2px;">
-                    <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
-                    <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+                @if($note->is_pinned || ($note->shares && $note->shares->count() > 0))
+                <div class="flex items-center gap-2" style="margin-bottom:2px;">
+                    @if($note->is_pinned)
+                    <div class="flex items-center gap-0.5">
+                        <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
+                        <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
+                    </div>
+                    @endif
+                    @if($note->shares && $note->shares->count() > 0)
+                    <div class="flex items-center gap-0.5">
+                        <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
+                        <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+                    </div>
+                    @endif
                 </div>
                 @endif
                 @if($note->labels->count() > 0)
@@ -115,33 +114,32 @@
         @else
         {{-- ════ LIST content ════ --}}
             <div class="flex items-start gap-2 w-full min-w-0">
-                {{-- Status icons (lock + share only — pin moved below title) --}}
-                @if($note->has_password || ($note->shares && $note->shares->count() > 0))
+                {{-- Status icons (lock only) --}}
+                @if($note->has_password)
                 <div class="flex items-center gap-0.5 flex-shrink-0 mt-0.5">
-                    @if($note->has_password)
                     <span class="material-icons-outlined" style="font-size:14px;color:#ef4444;" title="Protected">lock</span>
-                    @endif
-                    @if($note->shares && $note->shares->count() > 0)
-                    <span class="material-icons-outlined" style="font-size:14px;color:#3b82f6;" title="Shared">share</span>
-                    @endif
                 </div>
                 @endif
 
-                {{-- Title + pin indicator + preview + bottom row --}}
+                {{-- Title + pin/shared badge + preview + bottom row --}}
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 min-w-0">
                         <h3 class="font-semibold text-sm truncate flex-1 min-w-0">{{ $note->title ?: 'Untitled' }}</h3>
                     </div>
-                    @if($note->is_pinned)
-                    <div class="pin-badge-below-title flex items-center gap-0.5" style="margin-bottom:1px;">
-                        <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
-                        <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
-                    </div>
-                    @endif
-                    @if($note->shares && $note->shares->count() > 0)
-                    <div class="flex items-center gap-0.5" style="margin-bottom:1px;">
-                        <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
-                        <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+                    @if($note->is_pinned || ($note->shares && $note->shares->count() > 0))
+                    <div class="flex items-center gap-2" style="margin-bottom:1px;">
+                        @if($note->is_pinned)
+                        <div class="flex items-center gap-0.5">
+                            <span class="material-icons-outlined" style="font-size:11px;color:#f59e0b;">push_pin</span>
+                            <span style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.04em;">Pinned</span>
+                        </div>
+                        @endif
+                        @if($note->shares && $note->shares->count() > 0)
+                        <div class="flex items-center gap-0.5">
+                            <span class="material-icons-outlined" style="font-size:11px;color:#3b82f6;">share</span>
+                            <span style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.04em;">Shared</span>
+                        </div>
+                        @endif
                     </div>
                     @endif
                     @if($note->has_password)
